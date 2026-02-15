@@ -1,0 +1,17 @@
+name = "PhD"
+version = "0.1.0"
+license = "MIT"
+author = "Georgios Loukas"
+maintainer = "georgios.a.loukas@gmail.com"
+copyright = "Copyright 2026, iLouke"
+
+[build]
+auto-executables = true
+auto-tests = true
+auto-examples = true
+link = ["flexiblas"]
+
+[dependencies]
+stdlib = "*"					           # Standard Modern Fortran Library
+#openmp = "*"						   # Multithread Capability
+toml-f = { git = "https://github.com/toml-f/toml-f.git" }  # Reading simulation config files

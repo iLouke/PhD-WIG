@@ -1,0 +1,14 @@
+build/
+output/
+
+*.mod
+*.o
+*.a
+*.dat
+*.log
+*.gp
+
+*~
+*.swp
+.DS_Store
+
