@@ -1,5 +1,6 @@
 module plotting_mod
    use base_kinds_mod, only: wp
+   use logger_mod, only: global_logger, LOG_INFO, LOG_WARN, LOG_ERROR
    implicit none
    private
    public :: plotter_t
@@ -156,8 +157,8 @@ contains
       close (this%script_unit)
 
       if (.not. gnuplot_available) then
-         print '(A)', "[PLOTTER] Gnuplot not available - skipping plot rendering"
-         print '(A)', "[PLOTTER] Data saved to: "//trim(this%script_file)
+         call global_logger%msg(LOG_WARN, "[PLOTTER] Gnuplot not available - skipping render")
+         call global_logger%msg(LOG_INFO, "[PLOTTER] Data saved to: "//trim(this%script_file))
          return
       end if
 
@@ -173,12 +174,12 @@ contains
       character(len=10) :: id_str
 
       if (.not. gnuplot_available) then
-         print '(A)', "[PLOTTER] Cannot save PNG - gnuplot not available"
+         call global_logger%msg(LOG_ERROR, "[PLOTTER] Cannot save PNG - gnuplot not available")
          return
       end if
 
       if (this%series_count == 0) then
-         print '(A)', "[PLOTTER] No data to save"
+         call global_logger%msg(LOG_WARN, "[PLOTTER] No data to save")
          return
       end if
 
@@ -205,7 +206,7 @@ contains
 
       ! Execute gnuplot to generate PNG
       call execute_command_line("gnuplot "//trim(png_script))
-      print '(A,A)', "[PLOTTER] Plot saved to: ", trim(filename)
+      call global_logger%msg(LOG_INFO, "[PLOTTER] Plot saved to: "//trim(filename))
    end subroutine plotter_save
 
    subroutine check_gnuplot_available()
@@ -219,11 +220,11 @@ contains
 
       if (exit_code == 0) then
          gnuplot_available = .true.
-         print '(A)', "[PLOTTER] Gnuplot detected - plots will be rendered"
+         call global_logger%msg(LOG_INFO, "[PLOTTER] Gnuplot detected - plots will be rendered")
       else
          gnuplot_available = .false.
-         print '(A)', "[PLOTTER] WARNING: Gnuplot not found - plots will be skipped"
-         print '(A)', "[PLOTTER] Install gnuplot to enable plot rendering"
+         call global_logger%msg(LOG_WARN, "[PLOTTER] WARNING: Gnuplot not found - plots will be skipped")
+         call global_logger%msg(LOG_INFO, "[PLOTTER] Install gnuplot to enable plot rendering")
       end if
    end subroutine check_gnuplot_available
 
