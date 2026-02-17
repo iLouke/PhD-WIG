@@ -1,110 +1,152 @@
-program test_foundations
+program z_up_free_fall
    use base_kinds_mod, only: wp
    use constants_mod, only: PI
-   use math_utils_mod
-   use timer_mod
-   use logger_mod
+   use rigid_body_mod
    use plotting_mod
+   use logger_mod
    use helper_mod, only: real_to_char
    implicit none
 
-   ! --- Object Declarations ---
-   type(timer_t)   :: main_timer
-   type(plotter_t) :: plot1, plot2  ! Renamed for clarity (was plot, plot_)
+   ! --- Objects ---
+   type(rigid_body_t) :: body
+   type(plotter_t)    :: plt_pos
 
-   ! --- Data Variables ---
-   real(wp) :: v1(3), v2(3), v3(3)
-   real(wp) :: A(2, 2), B(2)
-   integer  :: info
+   ! --- Simulation Parameters ---
+   real(wp), parameter :: dt = 0.01_wp
+   real(wp), parameter :: t_end = 10.0_wp
+   real(wp), parameter :: mass = 1.0_wp
+   real(wp), parameter :: g = 9.81_wp
+   integer :: n_steps, i
+   integer :: n_steps_g, n_steps_free
 
-   real(wp), allocatable :: x(:), y1(:), y2(:)
-   integer :: i, n_pts
+   ! --- Data Recording ---
+   real(wp), allocatable :: t_hist(:)
+   real(wp), allocatable :: x_hist(:)
+   real(wp), allocatable :: y_hist(:)
+   real(wp), allocatable :: z_hist(:) ! Altitude (+Z)
+   real(wp), allocatable :: w_hist(:) ! Vertical Velocity (+Z is up)
 
-   ! --- 1. Initialization ---
-   n_pts = 100
+   real(wp) :: inertia(3, 3), force(3)
+   real(wp) :: current_pos(3), current_vel(3)
+   real(wp) :: energy_ref, rel_err_energy, rel_err_lin, rel_err_ang
+   real(wp) :: lin_mom_ref(3), ang_mom_ref(3)
+   real(wp) :: force_impulse(3)
+   logical :: ok
 
-   ! Initialize global_logger (File + Console enabled by default)
-   call global_logger%init("foundation_test.log", level=LOG_DEBUG)
+   ! =================================================================
+   ! 1. SETUP (Start at 1000m Altitude)
+   ! =================================================================
+   call global_logger%init("z_up_test.log", level=LOG_INFO)
+   call global_logger%msg(LOG_INFO, "Initializing Z-UP Free Fall...")
 
-   call global_logger%msg(LOG_INFO, "Starting system test...")
-   call main_timer%start()
+   n_steps = int(t_end/dt)
+   allocate (t_hist(n_steps), x_hist(n_steps), y_hist(n_steps), z_hist(n_steps), w_hist(n_steps))
 
-   ! --- 2. Math & LAPACK Tests ---
-   call global_logger%msg(LOG_DEBUG, "Running Vector/Matrix operations...")
+   ! Simple Inertia
+   inertia = 0.0_wp
+   inertia(1, 1) = 1.0_wp; inertia(2, 2) = 1.0_wp; inertia(3, 3) = 1.0_wp
 
-   v1 = [1.0_wp, 0.0_wp, 0.0_wp]
-   v2 = [0.0_wp, 1.0_wp, 0.0_wp]
+   ! Init at Z = 1000m (HIGH UP)
+   call body%init(mass, inertia, init_pos=[0.0_wp, 0.0_wp, 1000.0_wp])
 
-   ! Assuming cross_product returns a real(wp) array of size 3
-   v3 = cross_product(v1, v2)
+   ! =================================================================
+   ! 2. SIMULATION LOOP
+   ! =================================================================
+   do i = 1, n_steps
 
-   A = reshape([4.0_wp, 1.0_wp, 1.0_wp, 3.0_wp], [2, 2])
-   B = [1.0_wp, 2.0_wp]
+      force = [mass*g*cos(PI*real(i, wp)/n_steps), mass*g*sin(PI*real(i, wp)/n_steps), -mass*g]
 
-   ! Assuming solve_linear_system handles the LAPACK call
-   call solve_linear_system(A, B, info)
+      call body%add_force(force, [0.0_wp, 0.0_wp, 0.0_wp])
+      call body%step(dt)
 
-   if (info == 0) then
-      call global_logger%msg(LOG_INFO, "Linear system solved successfully.")
-   else
-      call global_logger%msg(LOG_ERROR, "Linear system solution failed.")
-   end if
+      ! Record
+      current_pos = body%get_pos()
+      current_vel = body%get_vel()
 
-   ! --- 3. Advanced Plotting Test ---
-   call global_logger%msg(LOG_INFO, "Infra: Generating Plot Data...")
-
-   allocate (x(n_pts), y1(n_pts), y2(n_pts))
-
-   do i = 1, n_pts
-      ! Create x from 0 to 4*PI
-      x(i) = real(i - 1, wp)*(4.0_wp*PI/real(n_pts - 1, wp))
-
-      ! y1: Pure Sine
-      y1(i) = sin(x(i))
-
-      ! y2: Damped Cosine (e.g. system decay)
-      y2(i) = cos(x(i))*exp(-0.2_wp*x(i))
+      t_hist(i) = real(i, wp)*dt
+      x_hist(i) = current_pos(1) ! X (should stay near 0)
+      y_hist(i) = current_pos(2) ! Y (should stay near 0
+      z_hist(i) = current_pos(3) ! Altitude
+      w_hist(i) = current_vel(3) ! Vertical Speed (will go negative)
    end do
 
-   ! --- Plot 1: Standard Interactive View ---
-   call global_logger%msg(LOG_INFO, "Infra: Rendering Figure 1 (Interactive)...")
+   call global_logger%msg(LOG_INFO, "Sim Complete.")
+   call global_logger%msg(LOG_INFO, "Final Alt: "//trim(real_to_char(z_hist(n_steps)))//" m")
+   call global_logger%msg(LOG_INFO, "Final Vel: "//trim(real_to_char(w_hist(n_steps)))//" m/s")
 
-   call plot1%figure()
-   call plot1%title("System Response (Interactive)")
-   call plot1%xlabel("Time (s)")
-   call plot1%ylabel("Amplitude")
-   call plot1%grid(.true.)
-   call plot1%xrange(0.0_wp, 12.0_wp)
+   ! =================================================================
+   ! 3. PLOTTING (Intuitive Z-Up Graphs)
+   ! =================================================================
 
-   ! Add Series with Styles
-   call plot1%add(x, y1, "Pure Sine", "lines lw 2 lc rgb 'blue'")
-   call plot1%add(x, y2, "Damped Cosine", "lines lw 2 lc rgb 'red' dt 2")
+   call plt_pos%figure()
+   call plt_pos%title("X Direction")
+   call plt_pos%xlabel("Time (s)")
+   call plt_pos%ylabel("X Position (m)")
+   call plt_pos%grid(.true.)
+   call plt_pos%add(t_hist, x_hist, "X Position", "lines lw 2 lc rgb 'blue'")
+   call plt_pos%save("output/x_vs_time.png")
 
-   call plot1%render() ! Opens Gnuplot Window
+   call plt_pos%figure()
+   call plt_pos%title("Y Direction")
+   call plt_pos%xlabel("Time (s)")
+   call plt_pos%ylabel("Y Position (m)")
+   call plt_pos%grid(.true.)
+   call plt_pos%add(t_hist, y_hist, "Y Position", "lines lw 2 lc rgb 'green'")
+   call plt_pos%save("output/y_vs_time.png")
 
-   ! --- Plot 2: Zoomed View (Saved to File) ---
-   call global_logger%msg(LOG_INFO, "Infra: Rendering Figure 2 (PNG Export)...")
+   call plt_pos%figure()
+   call plt_pos%title("Z Direction")
+   call plt_pos%xlabel("Time (s)")
+   call plt_pos%ylabel("Z Position (m)")
+   call plt_pos%grid(.true.)
+   call plt_pos%add(t_hist, z_hist, "Z Position", "lines lw 2 lc rgb 'green'")
+   call plt_pos%save("output/z_vs_time.png")
 
-   call plot2%figure()
-   call plot2%title("Zoomed Decay Analysis")
-   call plot2%xlabel("Time (s)")
-   call plot2%ylabel("Amplitude")
-   call plot2%grid(.true.)
+   ! =================================================================
+   ! 4. GRAVITY HELPER EXAMPLE (No Plots)
+   ! =================================================================
+   call global_logger%msg(LOG_INFO, "Running gravity helper example...")
 
-   ! Zoom in specifically on the tail end
-   call plot2%xrange(2.0_wp, 10.0_wp)
-   call plot2%yrange(-0.8_wp, 0.8_wp)
+   call body%init(mass, inertia, init_pos=[0.0_wp, 0.0_wp, 100.0_wp])
+   n_steps_g = int(2.0_wp/dt)
+   do i = 1, n_steps_g
+      call body%add_gravity()
+      call body%step(dt)
+   end do
+   current_pos = body%get_pos()
+   current_vel = body%get_vel()
+   call global_logger%msg(LOG_INFO, "Gravity helper final Alt: "//trim(real_to_char(current_pos(3)))//" m")
+   call global_logger%msg(LOG_INFO, "Gravity helper final Vel: "//trim(real_to_char(current_vel(3)))//" m/s")
 
-   call plot2%add(x, y2, "Decay Envelope", "linespoints pt 7 ps 0.5 lc rgb 'dark-green'")
+   ! =================================================================
+   ! 5. ENERGY/MOMENTUM CHECK (Impulse then Free Flight)
+   ! =================================================================
+   call global_logger%msg(LOG_INFO, "Running energy/momentum check...")
 
-   ! Save directly to file (No window needed)
-   call plot2%save("output/damped_cosine_zoom.png")
+   call body%init(mass, inertia, init_pos=[0.0_wp, 0.0_wp, 0.0_wp])
+   force_impulse = [1.0_wp, 0.0_wp, 0.0_wp]
+   call body%add_force(force_impulse, [0.0_wp, 0.0_wp, 0.0_wp])
+   call body%step(dt)
 
-   ! --- 4. Finalization ---
-   call main_timer%stop()
+   call body%get_energy_momentum(energy_ref, lin_mom_ref, ang_mom_ref)
 
-   call global_logger%msg(LOG_INFO, "--- Test Complete ---")
-   call global_logger%msg(LOG_INFO, "Wall Time: "//trim(real_to_char(main_timer%report()))//" s")
+   n_steps_free = 500
+   do i = 1, n_steps_free
+      call body%step(dt)
+   end do
+
+   call body%check_energy_momentum(energy_ref, lin_mom_ref, ang_mom_ref, &
+                                   rel_err_energy, rel_err_lin, rel_err_ang, ok)
+
+   call global_logger%msg(LOG_INFO, "Energy rel err: "//trim(real_to_char(rel_err_energy)))
+   call global_logger%msg(LOG_INFO, "Lin mom rel err: "//trim(real_to_char(rel_err_lin)))
+   call global_logger%msg(LOG_INFO, "Ang mom rel err: "//trim(real_to_char(rel_err_ang)))
+   if (ok) then
+      call global_logger%msg(LOG_INFO, "Energy/momentum check: PASS")
+   else
+      call global_logger%msg(LOG_INFO, "Energy/momentum check: FAIL")
+   end if
+
    call global_logger%close()
 
-end program test_foundations
+end program z_up_free_fall
