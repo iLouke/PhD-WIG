@@ -45,7 +45,7 @@ contains
 
       ! D. Verify File Creation
       inquire (file=log_file, exist=file_exists)
-      call assert(file_exists, "Logger failed to create '"//log_file//"'")
+      call assert(file_exists, "Logger created '"//log_file//"'")
    end subroutine test_logger_module
 
    ! --- 2. Timer Test ---
