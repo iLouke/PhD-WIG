@@ -3,7 +3,7 @@ module helper_mod
    implicit none
    private
 
-   public :: real_to_char
+   public :: real_to_char, int_to_char
 
 contains
 
@@ -24,5 +24,23 @@ contains
       write (str, actual_fmt) val
       str = adjustl(str) ! Remove leading spaces
    end function real_to_char
+
+   !> Converts a integer number to a string
+   !> Usage: trim(int_to_char(my_val))
+   function int_to_char(val, fmt) result(str)
+      integer(ip), intent(in) :: val
+      character(len=*), intent(in), optional :: fmt
+      character(len=32) :: str
+      character(len=32) :: actual_fmt
+
+      if (present(fmt)) then
+         actual_fmt = fmt
+      else
+         actual_fmt = '(I12)' ! Integer format (fixed width)
+      end if
+
+      write (str, actual_fmt) val
+      str = adjustl(str) ! Remove leading spaces
+   end function int_to_char
 
 end module helper_mod
