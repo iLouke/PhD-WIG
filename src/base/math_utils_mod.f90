@@ -7,6 +7,12 @@ module math_utils_mod
    public :: solve_linear_system
    public :: factorize_matrix
    public :: solve_pre_factorized
+   public :: inv
+
+   ! --- GENERIC Interface ---
+   interface inv
+      module procedure invert_matrix
+   end interface
 
    ! --- LAPACK INTERFACE BLOCK ---
    interface
@@ -39,6 +45,16 @@ module math_utils_mod
          real(wp), intent(inout) :: b(ldb, *)
          integer, intent(out) :: info
       end subroutine dgetrs
+
+      ! Matrix Inversion (via LU factors)
+      subroutine dgetri(n, a, lda, ipiv, work, lwork, info)
+         import :: wp, ip
+         integer(ip), intent(in) :: n, lda, lwork
+         real(wp), intent(inout) :: a(lda, *)
+         integer(ip), intent(in) :: ipiv(*)
+         real(wp), intent(out) :: work(*)
+         integer(ip), intent(out) :: info
+      end subroutine dgetri
    end interface
 
 contains
@@ -67,7 +83,7 @@ contains
       deallocate (ipiv)
    end subroutine solve_linear_system
 
-   !> STEP 1: FACTORIZE (A = L * U)
+   !> FACTORIZE (A = L * U)
    !> Call this once when the geometry/AIC matrix is generated.
    !> Note: ipiv should be stored in Body or Solver object
    !> ipiv is essential for the system solution
@@ -81,10 +97,10 @@ contains
       call dgetrf(n, n, A, n, ipiv, info)
    end subroutine factorize_matrix
 
-   !> STEP 2: SOLVE PRE-FACTORIZED (L * U * X = B)
+   !> SOLVE PRE-FACTORIZED (L * U * X = B)
    !> Call this multiple times with new RHS vectors B.
    subroutine solve_pre_factorized(A_lu, ipiv, B, info)
-      real(wp), intent(in)    :: A_lu(:, :)   !< Pre-factorized LU matrix
+      real(wp), intent(in)    :: A_lu(:, :)  !< Pre-factorized LU matrix
       integer, intent(in)     :: ipiv(:)     !< Pivot indices from Step 1
       real(wp), intent(inout) :: B(:)        !< RHS vector (overwritten by solution X)
       integer, intent(out)    :: info        !< Status
@@ -93,5 +109,48 @@ contains
       n = size(A_lu, 1)
       call dgetrs('N', n, 1, A_lu, n, ipiv, B, n, info)
    end subroutine solve_pre_factorized
+
+   !> Generic Matrix Inversion using LAPACK
+   subroutine invert_matrix(A, A_inv, status)
+      real(wp), intent(in)    :: A(:, :)
+      real(wp), intent(out)   :: A_inv(:, :)
+      integer(ip), intent(out) :: status
+
+      real(wp), allocatable :: work(:)
+      integer(ip), allocatable :: ipiv(:)
+      integer(ip) :: n, lda, lwork, info
+
+      n = size(A, 1)
+      lda = n
+
+      ! Check if square
+      if (size(A, 2) /= n) then
+         status = -1 ! Error: Not square
+         return
+      end if
+
+      ! Allocate LAPACK workspace
+      ! LWORK >= N is required, but N*N is often suggested for optimal performance
+      lwork = max(1, n*n)
+      allocate (work(lwork))
+      allocate (ipiv(n))
+
+      ! Initialize output with input (LAPACK overwrites this)
+      A_inv = A
+
+      ! 1. LU Factorization (DGETRF)
+      call dgetrf(n, n, A_inv, lda, ipiv, info)
+      if (info /= 0) then
+         status = info
+         deallocate (work, ipiv)
+         return
+      end if
+
+      ! 2. Inversion (DGETRI)
+      call dgetri(n, A_inv, lda, ipiv, work, lwork, info)
+      status = info
+
+      deallocate (work, ipiv)
+   end subroutine invert_matrix
 
 end module math_utils_mod
