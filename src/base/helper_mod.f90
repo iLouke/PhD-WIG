@@ -3,7 +3,7 @@ module helper_mod
    implicit none
    private
 
-   public :: real_to_char, int_to_char
+   public :: real_to_char, int_to_char, count_rows
 
 contains
 
@@ -42,5 +42,27 @@ contains
       write (str, actual_fmt) val
       str = adjustl(str) ! Remove leading spaces
    end function int_to_char
+
+   function count_rows(filename) result(num_rows)
+      character(len=*), intent(in) :: filename
+      integer(ip) :: num_rows
+      integer :: iunit, ios
+      character(len=256) :: line
+
+      num_rows = 0_ip
+      open (newunit=iunit, file=filename, status='old', action='read', iostat=ios)
+      if (ios /= 0) then
+         num_rows = -1_ip ! Indicate error with -1
+         return
+      end if
+
+      do
+         read (iunit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         num_rows = num_rows + 1_ip
+      end do
+
+      close (iunit)
+   end function count_rows
 
 end module helper_mod

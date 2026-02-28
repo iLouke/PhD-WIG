@@ -14,4 +14,4 @@ link = ["flexiblas"]
 [dependencies]
 stdlib = "*"					           # Standard Modern Fortran Library
 #openmp = "*"						   # Multithread Capability
-toml-f = { git = "https://github.com/toml-f/toml-f.git" }  # Reading simulation config files
+toml-f.git = "https://github.com/toml-f/toml-f" # Reading simulation config files

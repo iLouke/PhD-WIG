@@ -1,6 +1,0 @@
-# Wingman Vehicle Trajectory
-# Flying 10m behind and 15m to the right of the lead WIG
-Time, U, V, W, Roll, Pitch, Yaw, X, Y, Z
-0.0, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, -10.0, 15.0, 2.0
-0.5, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, 5.0, 15.0, 2.0
-1.0, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, 20.0, 15.0, 2.0
