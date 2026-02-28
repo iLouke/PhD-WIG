@@ -7,6 +7,7 @@ module math_utils_mod
    public :: solve_linear_system
    public :: factorize_matrix
    public :: solve_pre_factorized
+   public :: solve_svd_least_squares
 
    ! --- LAPACK INTERFACE BLOCK ---
    interface
@@ -39,6 +40,21 @@ module math_utils_mod
          real(wp), intent(inout) :: b(ldb, *)
          integer, intent(out) :: info
       end subroutine dgetrs
+
+      ! SVD Least-Squares solve: min |A*X - B| (for ill-conditioned systems)
+      subroutine dgelsd(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, &
+                        work, lwork, iwork, info)
+         import :: wp
+         integer, intent(in)    :: m, n, nrhs, lda, ldb, lwork
+         real(wp), intent(inout) :: a(lda, *)
+         real(wp), intent(inout) :: b(ldb, *)
+         real(wp), intent(out)  :: s(*)
+         real(wp), intent(in)   :: rcond
+         integer, intent(out)   :: rank
+         real(wp), intent(out)  :: work(*)
+         integer, intent(out)   :: iwork(*)
+         integer, intent(out)   :: info
+      end subroutine dgelsd
    end interface
 
 contains
@@ -93,5 +109,36 @@ contains
       n = size(A_lu, 1)
       call dgetrs('N', n, 1, A_lu, n, ipiv, B, n, info)
    end subroutine solve_pre_factorized
+
+   !> SVD LEAST-SQUARES SOLVE (fallback for ill-conditioned systems)
+   !> Uses LAPACK DGELSD with threshold-based rank truncation.
+   subroutine solve_svd_least_squares(A, B, rcond, info)
+      real(wp), intent(inout) :: A(:, :)     !< Matrix A (N x N). DESTROYED on output.
+      real(wp), intent(inout) :: B(:)        !< RHS vector (overwritten with solution)
+      real(wp), intent(in)    :: rcond       !< Reciprocal condition number threshold
+      integer, intent(out)    :: info        !< Status
+      integer :: n, lwork, rank
+      real(wp), allocatable :: s(:), work(:)
+      integer, allocatable  :: iwork(:)
+      real(wp) :: work_query(1)
+      integer  :: iwork_query(1)
+
+      n = size(A, 1)
+      allocate (s(n))
+
+      ! Workspace query
+      call dgelsd(n, n, 1, A, n, B, n, s, rcond, rank, &
+                  work_query, -1, iwork_query, info)
+
+      lwork = int(work_query(1))
+      allocate (work(lwork))
+      allocate (iwork(iwork_query(1)))
+
+      ! Actual solve
+      call dgelsd(n, n, 1, A, n, B, n, s, rcond, rank, &
+                  work, lwork, iwork, info)
+
+      deallocate (s, work, iwork)
+   end subroutine solve_svd_least_squares
 
 end module math_utils_mod

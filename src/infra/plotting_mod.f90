@@ -166,6 +166,8 @@ contains
          write (this%script_unit, '(A, A)') "plot ", trim(this%plot_cmd)
       end if
 
+      ! Keep window open and interactive until user closes it
+      write (this%script_unit, '(A)') "pause mouse close"
       close (this%script_unit)
 
       if (.not. gnuplot_available) then
@@ -174,7 +176,8 @@ contains
          return
       end if
 
-      call execute_command_line("gnuplot -persist "//trim(this%script_file))
+      ! Launch in background so program doesn't block
+      call execute_command_line("gnuplot "//trim(this%script_file)//" &")
    end subroutine plotter_render
 
    subroutine plotter_save(this, filename)
@@ -383,14 +386,24 @@ contains
    end subroutine plotter_add_panels_3d
 
    !> Render the 3D plot interactively (opens a gnuplot window)
+   !!
+   !! Launches gnuplot as a background process so the Fortran program
+   !! continues immediately. The gnuplot window stays open and fully
+   !! interactive (rotate, zoom, pan with mouse) until the user closes it.
    subroutine plotter_render_3d(this)
       class(plotter_t), intent(inout) :: this
+      logical :: is_open
 
-      if (this%splot_count > 0) then
-         write (this%script_unit, '(A,A)') "splot ", trim(this%splot_cmd)
+      ! Write the splot command and pause if still open
+      inquire (unit=this%script_unit, opened=is_open)
+      if (is_open) then
+         if (this%splot_count > 0) then
+            write (this%script_unit, '(A,A)') "splot ", trim(this%splot_cmd)
+         end if
+         ! Keep gnuplot window open and interactive until user closes it
+         write (this%script_unit, '(A)') "pause mouse close"
+         close (this%script_unit)
       end if
-
-      close (this%script_unit)
 
       if (.not. gnuplot_available) then
          call global_logger%msg(LOG_WARN, "[PLOTTER] Gnuplot not available - skipping 3D render")
@@ -398,8 +411,9 @@ contains
          return
       end if
 
-      call execute_command_line("gnuplot -persist "//trim(this%script_file))
-      call global_logger%msg(LOG_INFO, "[PLOTTER] 3D plot rendered: "//trim(this%script_file))
+      ! Launch gnuplot in background (&) so it doesn't block the program
+      call execute_command_line("gnuplot "//trim(this%script_file)//" &")
+      call global_logger%msg(LOG_INFO, "[PLOTTER] 3D interactive plot launched: "//trim(this%script_file))
    end subroutine plotter_render_3d
 
    !> Save the 3D plot to a PNG file (no interactive window)
@@ -414,11 +428,6 @@ contains
       integer :: png_unit
       character(len=256) :: png_script
       character(len=10) :: id_str
-      logical :: is_open
-
-      ! Close the main script unit if still open
-      inquire (unit=this%script_unit, opened=is_open)
-      if (is_open) close (this%script_unit)
 
       if (.not. gnuplot_available) then
          call global_logger%msg(LOG_ERROR, "[PLOTTER] Cannot save 3D PNG - gnuplot not available")

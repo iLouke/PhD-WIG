@@ -22,58 +22,11 @@ module aero_solver_mod
    !!
    !! An SVD fallback (DGELSD) is provided for ill-conditioned systems.
    use base_kinds_mod, only: wp, ip
+   use math_utils_mod, only: factorize_matrix, solve_pre_factorized, solve_svd_least_squares
    implicit none
    private
 
    public :: aero_linsys_t
-
-   ! ─── LAPACK Interface Block ──────────────────────────────────────────
-   interface
-      ! LU Factorization: A = P * L * U
-      subroutine dgetrf(m, n, a, lda, ipiv, info)
-         import :: wp
-         integer, intent(in)    :: m, n, lda
-         real(wp), intent(inout) :: a(lda, *)
-         integer, intent(out)   :: ipiv(*)
-         integer, intent(out)   :: info
-      end subroutine dgetrf
-
-      ! Solve using LU factors: A * X = B (A already factorized)
-      subroutine dgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info)
-         import :: wp
-         character, intent(in)  :: trans
-         integer, intent(in)    :: n, nrhs, lda, ldb
-         real(wp), intent(in)   :: a(lda, *)
-         integer, intent(in)    :: ipiv(*)
-         real(wp), intent(inout) :: b(ldb, *)
-         integer, intent(out)   :: info
-      end subroutine dgetrs
-
-      ! One-shot LU solve: A * X = B
-      subroutine dgesv(n, nrhs, a, lda, ipiv, b, ldb, info)
-         import :: wp
-         integer, intent(in)    :: n, nrhs, lda, ldb
-         real(wp), intent(inout) :: a(lda, *)
-         integer, intent(out)   :: ipiv(*)
-         real(wp), intent(inout) :: b(ldb, *)
-         integer, intent(out)   :: info
-      end subroutine dgesv
-
-      ! SVD Least-Squares solve: min |A*X - B| (for ill-conditioned systems)
-      subroutine dgelsd(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, &
-                        work, lwork, iwork, info)
-         import :: wp
-         integer, intent(in)    :: m, n, nrhs, lda, ldb, lwork
-         real(wp), intent(inout) :: a(lda, *)
-         real(wp), intent(inout) :: b(ldb, *)
-         real(wp), intent(out)  :: s(*)
-         real(wp), intent(in)   :: rcond
-         integer, intent(out)   :: rank
-         real(wp), intent(out)  :: work(*)
-         integer, intent(out)   :: iwork(*)
-         integer, intent(out)   :: info
-      end subroutine dgelsd
-   end interface
 
    ! ─── Type Definition ─────────────────────────────────────────────────
    type :: aero_linsys_t
@@ -116,11 +69,11 @@ contains
       allocate (this%A_lu(n, n))
       allocate (this%ipiv(n))
 
-      ! Copy matrix (DGETRF overwrites input)
+      ! Copy matrix (factorize_matrix overwrites input)
       this%A_lu = A
 
-      ! LU factorize via LAPACK
-      call dgetrf(n, n, this%A_lu, n, this%ipiv, info)
+      ! LU factorize via wrapper
+      call factorize_matrix(this%A_lu, this%ipiv, info)
 
       this%factorized = (info == 0)
    end subroutine linsys_factorize
@@ -143,12 +96,12 @@ contains
       end if
 
       ! Solve using LU factors: A_lu * x = b
-      call dgetrs('N', this%n, 1, this%A_lu, this%n, this%ipiv, b, this%n, info)
+      call solve_pre_factorized(this%A_lu, this%ipiv, b, info)
    end subroutine linsys_solve
 
    !> SVD least-squares solve (fallback for ill-conditioned systems)
    !!
-   !! Uses LAPACK DGELSD with threshold-based rank truncation.
+   !! Uses the wrapper subroutine from math_utils_mod.
    !! This is closer to what the legacy SVD code did with WMIN thresholding.
    !!
    !! @param A     The AIC matrix (N x N). DESTROYED on output.
@@ -162,29 +115,14 @@ contains
       real(wp), intent(in)    :: rcond
       integer, intent(out)    :: info
 
-      integer :: n, lwork, rank
-      real(wp), allocatable :: s(:), work(:)
-      integer, allocatable  :: iwork(:)
-      real(wp) :: work_query(1)
-      integer  :: iwork_query(1)
+      integer :: n
 
       n = size(A, 1)
       this%n = n
-      allocate (s(n))
 
-      ! Workspace query
-      call dgelsd(n, n, 1, A, n, b, n, s, rcond, rank, &
-                  work_query, -1, iwork_query, info)
+      ! Use wrapper subroutine for SVD least-squares solve
+      call solve_svd_least_squares(A, b, rcond, info)
 
-      lwork = int(work_query(1))
-      allocate (work(lwork))
-      allocate (iwork(iwork_query(1)))
-
-      ! Actual solve
-      call dgelsd(n, n, 1, A, n, b, n, s, rcond, rank, &
-                  work, lwork, iwork, info)
-
-      deallocate (s, work, iwork)
       this%factorized = .false.  ! SVD does not store factors for reuse
    end subroutine linsys_solve_svd
 
