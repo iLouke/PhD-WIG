@@ -1,684 +1,878 @@
       PROGRAM ROS
-C YPARXEI KAI GROUND EFFECT.
-C YPOLOGIZETAI H DIND
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/MP/AL(2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/GVV/C(2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/PPG/IPROP(2000)
-      COMMON/WAICOR/NC(2000)
-      COMMON/WIN/IPW(2000)
-      COMMON/WINTER/IPROPW(2000)
-      COMMON/NEIB/KN(3100,3100)
-      COMMON/VG1/A(3100,3100)
-      COMMON/VG2/B(2000)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/MP/AL(8000)
+      COMMON/ANPORT/DS(8000)
+      COMMON/GVV/C(8000),IPIV(8000)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/PPG/IPROP(8000)
+      COMMON/WAICOR/NC(8000)
+      COMMON/WIN/IPW(8000)
+      COMMON/WINTER/IPROPW(8000)
+      COMMON/NEIB/KN(8000,8000)
+      COMMON/VG1/A(8000,8000),A_ORIGINAL(8000,8000)
+      COMMON/VG2/B(8000)
+      COMMON/GEOM/ROT(3,3)
+
+      REAL MAC, MAX_WAKE_LENGTH
+      REAL HIST_LIFT(100)
+      INTEGER MAX_ITER
+
+      MAX_ITER = 100
+
+      OPEN(UNIT=20,FILE='WN.WAK'  ,STATUS='UNKNOWN')
+      OPEN(UNIT=48,FILE='loads.txt',STATUS='UNKNOWN')
+      OPEN(UNIT=50,FILE='log.txt' ,STATUS='UNKNOWN')
+
       RHO=1.225
       ITER=0
       ALIFT1=0.
-      OPEN(UNIT=21,FILE='WN.TST',STATUS='UNKNOWN')
-      OPEN(UNIT=10,FILE='WN.RES',STATUS='UNKNOWN')
-      OPEN(UNIT=20,FILE='WN.WAK',STATUS='UNKNOWN')
-      OPEN(UNIT=30,FILE='WN.PAN',STATUS='UNKNOWN')
-      OPEN(UNIT=40,FILE='WN.DAT',STATUS='UNKNOWN')
-      OPEN(UNIT=7,FILE='DELTA.PAN',STATUS='UNKNOWN')
-      OPEN(UNIT=8,FILE='DELTA.DAT',STATUS='UNKNOWN')
-      OPEN(UNIT=9,FILE='DELTA.INP',STATUS='UNKNOWN')
-      open(unit=41,file='tt',status='unknown')
-      OPEN(UNIT=46,FILE='SVWN',STATUS='UNKNOWN')
-      OPEN(UNIT=42,FILE='WVWN',STATUS='UNKNOWN')
-      OPEN(UNIT=43,FILE='NWN',STATUS='UNKNOWN')
-      OPEN(UNIT=45,FILE='IWWN',STATUS='UNKNOWN')
-      OPEN(UNIT=47,FILE='LINEWN.INP',STATUS='UNKNOWN') 
-      OPEN(UNIT=48,FILE='LIWN',STATUS='UNKNOWN')
-C 
       VAIP=0.
-C
-      CALL GEOM(NPAN,NGRID,ALF,BET,GAM,VINIT,EPS,DT,NSYM,NGRND,HFL)
-      CALL ANALGEO(NPAN)
-      IF(ITER.EQ.0) GO TO 94
-   93 CALL WAKE(ITER,VINIT,DT,NPAN,NPW,NGW,NGRID)
-      IF(ITER.EQ.1) CALL NEIBORG(NPAN,NGW)
-      IF(ITER.EQ.1) GO TO 96
+      ICONV = 0
+      ERROR = 0.
+
+
+      CALL READ_SETTINGS(NPAN,NGRID,ALF,BET,GAM,
+     1VINIT,EPS,DT,NSYM,INCH,NGRND,HFL,CGX,CGY,CGZ,WINGAREA,MAC)
+
+      MAX_WAKE_LENGTH = DT * VINIT * MAX_ITER
+      IF (MAX_WAKE_LENGTH .LE. 50*MAC) THEN
+         WRITE(*,*)  'PLEASE SELECT BIGGER TIMESTEP OR VINIT'
+         WRITE(50,*) 'PLEASE SELECT BIGGER TIMESTEP OR VINIT'
+         STOP
+      END IF
+      ! ITERATION = 0
+      CALL GEOM_MODDED(NPAN,NGRID,ALF,BET,GAM,NSYM,NGRND,
+     1HFL,CGX,CGY,CGZ,WINGAREA,MAC)
+
+      call print_run_settings(ALF,BET,GAM,VINIT,EPS,DT,NSYM,NGRND,
+     1CGX,CGY,CGZ,WINGAREA,MAC)
+
+      CALL ANALGEO_MODDED(NPAN)
+
+      CALL VORCALC(VINIT,NPAN,ITER,NPW,NSYM,NGRND)
+      ! ITERATION = 1
+      ALIFT1 = ALIFT
+      ITER = 1
+      CALL WAKE(ITER,VINIT,DT,NPAN,NPW,NGW,NGRID)
+      CALL NEIBORG(NPAN,NGW)
+      CALL WAKREL(ITER,NPAN,NGW,NPW,DT,NSYM,NGRND)
       CALL WAKINT(NPW,ITER)
-      CALL WAKCOR(NPAN,NGW,ITER)
-   96 CALL WAKREL(ITER,NPAN,NGW,NPW,DT,NSYM,NGRND)
-      CALL WAKINT(NPW,ITER)
-C      CALL IWCOR(ITER,NGW,NPAN)
-      IF(ITER.EQ.1) GO TO 94
-      CALL WAKCOR(NPAN,NGW,ITER)
-   94 CALL VORCALC(VINIT,NPAN,ITER,NPW,NSYM,VAIP,NGRND)
-      print *, 'vorcalc'
-      IF(ITER.EQ.0) GO TO 103
-      PRINT *, 'OK '
-	CALL AIRLOAD1(NPAN,VINIT,RHO,ALIFT,DRAG,SIDE,NSYM,ITER,
-	1NPW,NGRND)
-      IF(ABS((ALIFT1-ALIFT)/ALIFT).LE.EPS.OR.ITER.EQ.8)
-     1GO TO 95
-      ALIFT1=ALIFT
-      WRITE(48,*) ITER,ALIFT
-      PRINT *, 'ALIFT',ALIFT,'DRAG',DRAG,'SIDE',SIDE
-  103 ITER=ITER+1
-      GO TO 93
- 1002 FORMAT (5X,I8,F15.4)
-   95 DO 99 I=1,ITER+1
-      DO 98 J=1,NGW
-      WRITE(20,1001) I,J,XW(I,J),YW(I,J),ZW(I,J)
-   98 CONTINUE
-   99 CONTINUE
+      CALL VORCALC(VINIT,NPAN,ITER,NPW,NSYM,NGRND)
+      CALL CPAIP(ITER,NPAN,NPW,NSYM,VINIT,NGRND,CGX,CGY,CGZ,
+     1WINGAREA,MAC,ALIFT,DRAG,SIDE,AMROLL,AMPITCH,AMYAW)
+
+      HIST_LIFT(ITER) = ALIFT
+      ERROR = 0.0
+
+      WRITE(48,'(I2,6F15.5)') ITER, ALIFT, DRAG, SIDE,
+     1AMROLL,AMPITCH,AMYAW
+      WRITE(* ,100) ITER, ALIFT, DRAG, SIDE,
+     1AMROLL,AMPITCH,AMYAW, ERROR, EPS
+      WRITE(50 ,100) ITER, ALIFT, DRAG, SIDE,
+     1AMROLL,AMPITCH,AMYAW, ERROR, EPS
+
+      ALIFT1 = ALIFT
+      ITER = ITER + 1
+      
+      ! ITERATION = 2 - MAX_ITERATIONS
+      DO WHILE (ICONV.EQ.0)
+      
+         CALL WAKE(ITER,VINIT,DT,NPAN,NPW,NGW,NGRID)
+         CALL WAKINT(NPW,ITER)
+         CALL WAKCOR(NPAN,NGW,ITER)
+         CALL WAKREL(ITER,NPAN,NGW,NPW,DT,NSYM,NGRND)
+         CALL WAKINT(NPW,ITER)
+         CALL WAKCOR(NPAN,NGW,ITER)
+         CALL VORCALC(VINIT,NPAN,ITER,NPW,NSYM,NGRND)
+         CALL CPAIP(ITER,NPAN,NPW,NSYM,VINIT,NGRND,CGX,CGY,CGZ,
+     1WINGAREA,MAC,ALIFT,DRAG,SIDE,AMROLL,AMPITCH,AMYAW)
+
+         HIST_LIFT(ITER) = ALIFT
+
+         ERROR = SQRT((ALIFT1-ALIFT)**2/ALIFT**2)
+         IF (ITER.EQ.MAX_ITER) THEN
+            WRITE(* ,*) 'MAX ITERATIONS REACHED'
+            WRITE(50,*) 'MAX ITERATIONS REACHED'
+            ICONV = 1
+         END IF
+            WRITE(48,'(I2,3F15.5)') ITER, ALIFT, DRAG, SIDE
+            WRITE(* ,100) ITER, ALIFT, DRAG, SIDE,
+     1AMROLL,AMPITCH,AMYAW, ERROR, EPS
+            WRITE(50 ,100) ITER, ALIFT, DRAG, SIDE,
+     1AMROLL,AMPITCH,AMYAW, ERROR, EPS
+            IF (ERROR.LE.EPS) THEN
+               WAKE_LENGTH = DT * VINIT * ITER
+               IF (WAKE_LENGTH .LE. 50*MAC) THEN
+                  WRITE(*,*) 'WAKE LENGTH IS TOO SMALL. CONTINUING'
+                  WRITE(50,*) 'WAKE LENGTH IS TOO SMALL. CONTINUING'
+               ELSE
+                  WRITE(*,*) 'CONVERGENCE REACHED'
+                  WRITE(50,*) 'CONVERGENCE REACHED'
+                  ICONV = 1
+               END IF
+            END IF
+            ALIFT1 = ALIFT
+            ITER = ITER + 1
+      END DO
+
+      DO I=1,ITER
+         DO J=1,NGW
+            WRITE(20,1001) I,J,XW(I,J),YW(I,J),ZW(I,J)
+         END DO
+      END DO
+      CLOSE(20)
+         
+  100 FORMAT(14('-'),/,'ITERATION = ',I2,/,14('-'),/,
+     1'LIFT   = ',F15.3  ,' DRAG    = ',F15.3,' SIDE  = ',F15.3,/,
+     2'M_ROLL = ',F15.3  ,' M_PITCH = ',F15.3,' M_YAW = ',F15.3,/,
+     3'ERROR  = ', F15.10,' EPS     = ',F15.10)
  1001 FORMAT (5X,2I8,3F15.4)
-      DO 102 I=1,NPAN
-      WRITE(10,1002) I,AL(I)
-  102 CONTINUE
-      DO 104 I=1,NGRID
-      WRITE(40,110) I,X(I),Y(I),Z(I),MARK(I)
-  104 CONTINUE
-  110 FORMAT(I10,3F15.5,I10)
-      DO 105 I=1,NPAN
-      WRITE(30,120) I,IC(I,1),IC(I,2),IC(I,3),IC(I,4)
-  105 CONTINUE
-  120 FORMAT(5I10)
-      IF(VAIP.EQ.0.) GO TO 121
-      CALL CPAIP(ITER,NPAN,NPW,NSYM,VINIT,NGRND) 
-  121 CONTINUE
-      DO 122 I=1,NPAN
-      WRITE(46,*) C(I)
-  122 CONTINUE
-      DO 124 I=1,ITER
-      DO 123 J=1,NPW
-      WRITE(42,*) CW(I,J)
-  123 CONTINUE
-  124 CONTINUE
-      DO 125 I=1,NPAN
-      WRITE(43,*) ANX(I),ANY(I),ANZ(I),ALX(I),ALY(I),ALZ(I),
-     1ATX(I),ATY(I),ATZ(I),GX(I),GY(I),GZ(I),DS(I)
-  125 CONTINUE
-      DO 126 I=1,NPW
-      WRITE(45,*) ICW(I,1),ICW(I,2)
-  126 CONTINUE
-      WRITE(47,*) NPAN,NGRID,VINIT,ITER,NPW,NGW,NSYM,NGRND,
-     1ALF,BET,GAM,HFL
+
+      END PROGRAM ROS
+
+
+      SUBROUTINE VORTEX(X,Y,Z,X1,Y1,Z1,X2,Y2,Z2,GAMA,U,V,W)
+C     SUBROUTINE VORTEX CALCULATES THE INDUCED VELOCITY (U,V,W) AT A POI
+C     (X,Y,Z) DUE TO A VORTEX ELEMENT VITH STRENGTH GAMA PER UNIT LENGTH
+C     POINTING TO THE DIRECTION (X2,Y2,Z2)-(X1,Y1,Z1).
+      PAY=3.141592654
+      RCUT=1.0E-15
+
+C     CALCULATION OF R1 X R2
+      R1R2X=(Y-Y1)*(Z-Z2)-(Z-Z1)*(Y-Y2)
+      R1R2Y=-((X-X1)*(Z-Z2)-(Z-Z1)*(X-X2))
+      R1R2Z=(X-X1)*(Y-Y2)-(Y-Y1)*(X-X2)
+
+C     CALCULATION OF (R1 X R2 )**2
+      SQUARE=R1R2X*R1R2X+R1R2Y*R1R2Y+R1R2Z*R1R2Z
+
+C     CALCULATION OF R0(R1/R(R1)-R2/R(R2))
+      R1=SQRT((X-X1)*(X-X1)+(Y-Y1)*(Y-Y1)+(Z-Z1)*(Z-Z1))
+      R2=SQRT((X-X2)*(X-X2)+(Y-Y2)*(Y-Y2)+(Z-Z2)*(Z-Z2))
+      IF((R1.LT.RCUT).OR.(R2.LT.RCUT).OR.(SQUARE.LT.RCUT)) THEN
+C     WHEN POINT (X,Y,Z) LIES ON VORTEX ELEMENT; ITS INDUCED VELOCITY IS
+      U=0.
+      V=0.
+      W=0.
+      ELSE
+      R0R1=(X2-X1)*(X-X1)+(Y2-Y1)*(Y-Y1)+(Z2-Z1)*(Z-Z1)
+      R0R2=(X2-X1)*(X-X2)+(Y2-Y1)*(Y-Y2)+(Z2-Z1)*(Z-Z2)
+      COEF=GAMA/(4.0*PAY*SQUARE)*(R0R1/R1-R0R2/R2)
+      U=R1R2X*COEF
+      V=R1R2Y*COEF
+      W=R1R2Z*COEF
+      END IF
+
+
       END
 
+      SUBROUTINE VORTEX_RING( X, Y, Z,
+     1                       X1,Y1,Z1,
+     2                       X2,Y2,Z2,
+     3                       X3,Y3,Z3,
+     4                       X4,Y4,Z4,
+     5                  GAMA, U, V, W,SYM,GRND)
 
-      SUBROUTINE GEOM(NPAN,NGRID,ALF,BET,GAM,VINIT,EPS,DT,NSYM,NGRND,
-	1HFL)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/PPG/IPROP(2000)
-      PI=3.14159
-      READ(9,100) NPAN,NGRID,ALF,BET,GAM,VINIT,EPS,AL,NSYM,INCH,
-     1NGRND,HFL
-      ALF=ALF*PI/180.
-      BET=BET*PI/180.
-      GAM=GAM*PI/180.
-      IF(INCH.EQ.1) AL=AL/1000.
-C      DT=0.25*AL/VINIT
-      DT=0.03
-      DO 10 I=1,NGRID
-      READ(8,110) J,X(I),Y(I),Z(I),MARK(I)
-      IF(INCH.EQ.0) GO TO 5
-      X(I)=X(I)/1000.
-      Y(I)=Y(I)/1000.
-      Z(I)=Z(I)/1000.
-    5 XX=X(I)*COS(ALF)*COS(BET)+Y(I)*SIN(BET)+Z(I)*SIN(ALF)*COS(BET)
-      YY=-X(I)*(COS(ALF)*SIN(BET)*COS(GAM)-SIN(ALF)*SIN(GAM))+
-     1Y(I)*COS(BET)*COS(GAM)-Z(I)*(SIN(ALF)*SIN(BET)*COS(GAM)-
-     2COS(ALF)*SIN(GAM))
-      ZZ=X(I)*(COS(ALF)*SIN(BET)*SIN(GAM)-SIN(ALF)*COS(GAM))-
-     1Y(I)*COS(BET)*SIN(GAM)+Z(I)*(SIN(ALF)*SIN(BET)*SIN(GAM)+
-     2COS(ALF)*COS(GAM))
-      X(I)=XX
-      Y(I)=YY
-      Z(I)=ZZ
-      IF(NGRND.EQ.1) Z(I)=Z(I)+HFL
-   10 CONTINUE
-      DO 20 I=1,NPAN
-      READ(7,120) J,IC(I,1),IC(I,2),IC(I,3),IC(I,4),IPROP(I)
-   20 CONTINUE 
-  100 FORMAT(I10,/,I10,/,F10.3,/,F10.3,/,F10.3,/,F10.3,/,F5.3,/,F5.3
-     1,/,I10,/,I10,/,I10,/,F10.3)
-  110 FORMAT(I10,3F15.5,I10)
-  120 FORMAT(6I10)
-      CLOSE(7)
-      CLOSE(8)
-      CLOSE(9)
+      REAL   , INTENT(IN) :: X, Y, Z
+      REAL   , INTENT(IN) :: X1, Y1, Z1
+      REAL   , INTENT(IN) :: X2, Y2, Z2
+      REAL   , INTENT(IN) :: X3, Y3, Z3
+      REAL   , INTENT(IN) :: X4, Y4, Z4
+      REAL   , INTENT(IN) :: GAMA
+      INTEGER, INTENT(IN) :: SYM, GRND
+
+      REAL   , INTENT(OUT) :: U, V, W
+
+      REAL :: U1, V1, W1
+      REAL :: U2, V2, W2
+      REAL :: U3, V3, W3
+      REAL :: U4, V4, W4
+
+      G_LOC = GAMA
+      X_LOC = X; Y_LOC = Y; Z_LOC = Z
+
+      IF (SYM  .EQ. 1) Y_LOC = -Y; G_LOC = -GAMA
+      
+      IF (GRND .EQ. 1) Z_LOC = -Z
+
+      
+      ! Calculate induced velocities from each segment of the ring
+      CALL VORTEX(X_LOC,Y_LOC,Z_LOC,X1,Y1,Z1,X2,Y2,Z2,G_LOC,U1,V1,W1)
+      CALL VORTEX(X_LOC,Y_LOC,Z_LOC,X2,Y2,Z2,X3,Y3,Z3,G_LOC,U2,V2,W2)
+      CALL VORTEX(X_LOC,Y_LOC,Z_LOC,X3,Y3,Z3,X4,Y4,Z4,G_LOC,U3,V3,W3)
+      CALL VORTEX(X_LOC,Y_LOC,Z_LOC,X4,Y4,Z4,X1,Y1,Z1,G_LOC,U4,V4,W4)
+
+      ! Sum the contributions from all segments
+      U = U1 + U2 + U3 + U4
+      V = V1 + V2 + V3 + V4
+      W = W1 + W2 + W3 + W4
+
+      IF (SYM  .EQ. 1) V = -V
+      IF (GRND .EQ. 1) W = -W
+
+      END
+
+      SUBROUTINE CHECK_FAR_FIELD(X, Y, Z,
+     1                           X1,Y1,Z1,
+     2                           X2,Y2,Z2,
+     3                           X3,Y3,Z3,
+     4                           X4,Y4,Z4,FAR)
+      IMPLICIT NONE
+      REAL, INTENT(IN) :: X, Y, Z
+      REAL, INTENT(IN) :: X1, Y1, Z1
+      REAL, INTENT(IN) :: X2, Y2, Z2
+      REAL, INTENT(IN) :: X3, Y3, Z3
+      REAL, INTENT(IN) :: X4, Y4, Z4
+      LOGICAL, INTENT(OUT) :: FAR
+
+      REAL :: DIAGONAL, DIST1, DIST2, CPX, CPY, CPZ
+      REAL :: DISTANCE
+
+      ! INITIALIZE FAR FIELD CHECK
+      FAR = .FALSE.
+
+      ! Calculate the diagonal distance of the rectangle formed by the points
+      ! DISTANCE OF POINT 1 --> 3
+      DIST1 = SQRT((X1-X3)**2 + (Y1-Y3)**2 + (Z1-Z3)**2)
+      ! DISTANCE OF POINT 2 --> 4
+      DIST2 = SQRT((X2-X4)**2 + (Y2-Y4)**2 + (Z2-Z4)**2)
+      ! SELECT THE MAXIMUM DIAGONAL DISTANCE
+      DIAGONAL = MAX(DIST1, DIST2)
+      ! CALCULATE THE DISTANCE FROM THE POINT TO THE CENTER OF THE RECTANGLE
+      IF ((X3-X4 .LT. 1E-15).AND.
+     1    (Y3-Y4 .LT. 1E-15).AND.
+     2    (Z3-Z4 .LT. 1E-15)) THEN
+         CPX = (X1 + X2 + X3) / 3.0
+         CPY = (Y1 + Y2 + Y3) / 3.0
+         CPZ = (Z1 + Z2 + Z3) / 3.0
+      ELSE
+         CPX = (X1 + X2 + X3 + X4) / 4.0
+         CPY = (Y1 + Y2 + Y3 + Y4) / 4.0
+         CPZ = (Z1 + Z2 + Z3 + Z4) / 4.0
+      END IF
+
+      DISTANCE = SQRT((X-CPX)**2 + (Y-CPY)**2 + (Z-CPZ)**2)
+
+      IF (DISTANCE > 5.0 * DIAGONAL) THEN
+         ! IF THE DISTANCE IS GREATER THAN TWICE THE DIAGONAL, IT IS FAR FIELD
+         FAR = .TRUE.
+      END IF
+      
+
+      END SUBROUTINE CHECK_FAR_FIELD
+
+      SUBROUTINE VORCALC(VINIT,NPAN,ITER,NPW,NSYM,NGRND)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/VG1/A(8000,8000),A_ORIGINAL(8000,8000)
+      COMMON/VG2/B(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/GVV/XP(8000),IPIV(8000)
+
+      REAL :: NORMAL(3), QINF(3), VEL_IND(3)
+      INTEGER :: I, J, SYM, GRND
+      LOGICAL :: FAR
+
+
+      QINF  = (/VINIT, 0.0, 0.0/)
+
+      IF(ITER.EQ.0) THEN
+         A = 0.0
+         B = 0.0
+         DO I = 1, NPAN
+            PX = GX(I); PY = GY(I); PZ = GZ(I)
+            NORMAL = (/ANX(I), ANY(I), ANZ(I)/)
+            
+
+            B(I) = - DOT_PRODUCT(QINF, NORMAL)
+            
+            DO J = 1, NPAN
+
+               X1=X(IC(J,1)); Y1=Y(IC(J,1)); Z1=Z(IC(J,1))
+               X2=X(IC(J,2)); Y2=Y(IC(J,2)); Z2=Z(IC(J,2))
+               X3=X(IC(J,3)); Y3=Y(IC(J,3)); Z3=Z(IC(J,3))
+               X4=X(IC(J,4)); Y4=Y(IC(J,4)); Z4=Z(IC(J,4))
+
+               U = 0.0; V = 0.0; W = 0.0
+
+               ! Check if the point is in the far field
+               CALL CHECK_FAR_FIELD(PX, PY, PZ, X1, Y1, Z1,
+     1                                          X2, Y2, Z2, 
+     2                                          X3, Y3, Z3, 
+     3                                          X4, Y4, Z4, FAR)
+               IF (FAR) CYCLE
+
+               DO SYM = 0, NSYM
+                  DO GRND = 0, NGRND
+                     CALL VORTEX_RING(PX, PY, PZ,
+     1                                X1, Y1, Z1,
+     2                                X2, Y2, Z2,
+     3                                X3, Y3, Z3,
+     4                                X4, Y4, Z4,
+     5                           1.0, UI, VI, WI, SYM, GRND)
+                  U = U + UI
+                  V = V + VI
+                  W = W + WI
+                  END DO
+               END DO
+
+               A(I,J) = DOT_PRODUCT((/U, V, W/), NORMAL)
+            END DO
+         END DO
+      ELSE
+         DO I=1,NPAN
+            PX = GX(I); PY = GY(I); PZ = GZ(I)
+            NORMAL = (/ANX(I), ANY(I), ANZ(I)/)
+
+            U = 0.0; V = 0.0; W = 0.0
+
+            CALL VELWAK(ITER,NPW,NSYM,NGRND,PX,PY,PZ,U,V,W)
+
+            VEL_IND = (/U, V, W/)
+
+            B(I) = - DOT_PRODUCT(QINF + VEL_IND, NORMAL)
+         END DO
+      END IF
+
+      CALL SOLVE(ITER,NPAN)
+      END SUBROUTINE VORCALC
+
+
+
+      SUBROUTINE VELWAK(ITER,NPW,NSYM,NGRND,GX,GY,GZ,U,V,W)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GW/WX(100,8000),WY(100,8000),WZ(100,8000)
+
+      INTEGER :: SYM, GRND
+      LOGICAL :: FAR
+
+      U = 0.0; V = 0.0; W = 0.0
+
+      DO IK=1,ITER
+         DO JK=1,NPW
+            NA=0
+            X1=WX(IK,ICW(JK,1))
+            Y1=WY(IK,ICW(JK,1))
+            Z1=WZ(IK,ICW(JK,1))
+            X2=WX(IK,ICW(JK,2))
+            Y2=WY(IK,ICW(JK,2))
+            Z2=WZ(IK,ICW(JK,2))
+            X3=WX(IK+1,ICW(JK,2))
+            Y3=WY(IK+1,ICW(JK,2))
+            Z3=WZ(IK+1,ICW(JK,2))
+            X4=WX(IK+1,ICW(JK,1))
+            Y4=WY(IK+1,ICW(JK,1))
+            Z4=WZ(IK+1,ICW(JK,1))
+
+            DU = 0.0; DV = 0.0; DW = 0.0
+
+            ! Check if the point is in the far field
+            CALL CHECK_FAR_FIELD(GX, GY, GZ, X1, Y1, Z1,
+     1                                       X2, Y2, Z2, 
+     2                                       X3, Y3, Z3, 
+     3                                       X4, Y4, Z4, FAR)
+            IF (FAR) CYCLE
+
+            DO SYM = 0, NSYM
+               DO GRND = 0, NGRND
+                  CALL VORTEX_RING(GX, GY, GZ,
+     1                             X1, Y1, Z1,
+     2                             X2, Y2, Z2,
+     3                             X3, Y3, Z3,
+     4                             X4, Y4, Z4,
+     5                  CW(IK,JK), UI, VI, WI, SYM, GRND)
+                  DU = DU + UI
+                  DV = DV + VI
+                  DW = DW + WI
+               END DO
+            END DO
+
+            U = U + DU
+            V = V + DV
+            W = W + DW
+         END DO
+      END DO
+      END
+
+      SUBROUTINE VELPAN(NPAN,NSYM,NGRND,GX,GY,GZ,U,V,W) 
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GVV/C(8000),IPIV(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+
+      INTEGER :: SYM, GRND
+      LOGICAL :: FAR
+
+      U = 0.0; V = 0.0; W = 0.0
+
+
+      DO IK=1,NPAN
+
+         X1=X(IC(IK,1)); Y1=Y(IC(IK,1)); Z1=Z(IC(IK,1))
+         X2=X(IC(IK,2)); Y2=Y(IC(IK,2)); Z2=Z(IC(IK,2))
+         X3=X(IC(IK,3)); Y3=Y(IC(IK,3)); Z3=Z(IC(IK,3))
+         X4=X(IC(IK,4)); Y4=Y(IC(IK,4)); Z4=Z(IC(IK,4))
+
+         DU = 0.0; DV = 0.0; DW = 0.0
+
+         ! Check if the point is in the far field
+         CALL CHECK_FAR_FIELD(GX, GY, GZ, X1, Y1, Z1,
+     1                                    X2, Y2, Z2, 
+     2                                    X3, Y3, Z3, 
+     3                                    X4, Y4, Z4, FAR)
+         IF (FAR) CYCLE
+
+         DO SYM = 0, NSYM
+            DO GRND = 0, NGRND
+               CALL VORTEX_RING(GX, GY, GZ,
+     1                          X1, Y1, Z1,
+     2                          X2, Y2, Z2,
+     3                          X3, Y3, Z3,
+     4                          X4, Y4, Z4,
+     5                   C(IK), UI, VI, WI, SYM, GRND)
+               DU = DU + UI
+               DV = DV + VI
+               DW = DW + WI
+            END DO
+         END DO
+         U = U + DU
+         V = V + DV
+         W = W + DW
+      END DO
+      END
+
+      SUBROUTINE WAKREL(ITER,NPAN,NGW,NPW,DT,NSYM,NGRND) 
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/ANPORT/DS(8000)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GW/WX(100,8000),WY(100,8000),WZ(100,8000)
+      COMMON/GVV/C(8000),IPIV(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/WIN/IPW(8000)
+
+      DIMENSION TEMP_WX(100,500),TEMP_WY(100,500),TEMP_WZ(100,500)
+
+      DO I=1,ITER  
+         DO J=1,NGW
+            TEMP_WX(I,J) = WX(I,J)
+            TEMP_WY(I,J) = WY(I,J)
+            TEMP_WZ(I,J) = WZ(I,J)
+
+            XG=WX(I,J)
+            YG=WY(I,J)
+            ZG=WZ(I,J)
+
+            CALL VELPAN(NPAN,    NSYM,NGRND,XG,YG,ZG,U1,V1,W1) 
+            CALL VELWAK(ITER,NPW,NSYM,NGRND,XG,YG,ZG,U2,V2,W2)
+
+            U = U1 + U2
+            V = V1 + V2
+            W = W1 + W2
+
+            TEMP_WX(I,J) = TEMP_WX(I,J) + U*DT
+            TEMP_WY(I,J) = TEMP_WY(I,J) + V*DT
+            TEMP_WZ(I,J) = TEMP_WZ(I,J) + W*DT
+         END DO
+      END DO
+      DO I=1,ITER
+         DO J=1,NGW
+            WX(I,J) = TEMP_WX(I,J)
+            WY(I,J) = TEMP_WY(I,J)
+            WZ(I,J) = TEMP_WZ(I,J)
+         END DO
+      END DO
+      END
+
+          SUBROUTINE WAKE(ITER, VINIT, DT, NPAN, NPW, NGW, NGRID)
+      !
+      !=======================================================================
+      ! == WAKE - Modern Refactored Version ==
+      !
+      ! Purpose:
+      !   This subroutine generates and evolves the computational wake shed
+      !   from a body defined by panels. It performs three main tasks:
+      !   1. Identifies the "trailing edges" of the body.
+      !   2. Creates a new layer of wake elements at these trailing edges,
+      !      calculating their strength (circulation).
+      !   3. Convects the entire wake system (new and old elements)
+      !      downstream based on the free-stream velocity.
+      !
+      ! Modernization Notes:
+      !   - All GOTO statements have been removed and replaced with structured
+      !     loops (DO/END DO), conditional blocks (IF/THEN/ELSE/END IF),
+      !     and loop control statements (CYCLE, EXIT).
+      !   - Added comments to explain the logic and physical meaning.
+      !   - Code is indented for readability.
+      !=======================================================================
+      IMPLICIT NONE
+
+      !-----------------------------------------------------------------------
+      ! Argument Declarations
+      !-----------------------------------------------------------------------
+      INTEGER, INTENT(IN) :: ITER      ! Current iteration or time-step number
+      REAL(KIND=4), INTENT(IN) :: VINIT   ! Initial velocity for convection (likely free-stream)
+      REAL(KIND=4), INTENT(IN) :: DT      ! Time step size
+      INTEGER, INTENT(IN) :: NPAN      ! Number of panels on the body
+      INTEGER, INTENT(IN) :: NGRID     ! Number of grid points on the body
+      INTEGER, INTENT(OUT) :: NPW       ! Number of wake panel elements (vortices)
+      INTEGER, INTENT(OUT) :: NGW       ! Number of wake grid points
+
+      REAL(KIND=4) :: XW,YW,ZW
+      REAL(KIND=4) :: X,Y,Z
+      REAL(KIND=4) :: CW, C
+      INTEGER :: ICW, IPIV, IC, MARK, MARKW
+      REAL(KIND=4) :: ANX, ANY, ANZ, GX, GY, GZ
+      REAL(KIND=4) :: ATX, ATY, ATZ, ALX, ALY, ALZ
+      REAL(KIND=4) :: DS
+      REAL(KIND=4) :: X1X, Y1Y, Z1Z
+      INTEGER :: NC
+      INTEGER :: IPW, IPROPW, IPROP
+
+
+      !-----------------------------------------------------------------------
+      ! Common Block Data (Global Variables)
+      ! These are used to share large arrays between different subroutines.
+      !-----------------------------------------------------------------------
+      ! Wake point coordinates (x,y,z) for each time step and wake point index
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      ! Body grid point coordinates (x,y,z)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      ! Wake element circulation and connectivity
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      ! Body panel circulation and pivot info
+      COMMON/GVV/C(8000),IPIV(8000)
+      ! Body panel connectivity and markers
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      ! Panel normals, centers, and tangent vectors
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),
+     1GX(8000),GY(8000),GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),
+     1ALX(8000),ALY(8000),ALZ(8000)
+      COMMON/ANPORT/DS(8000)
+      ! Wake point coordinates at the trailing edge
+      COMMON/CORECT/ X1X(8000),Y1Y(8000),Z1Z(8000)
+      ! Node index associated with each wake point
+      COMMON/WAICOR/NC(8000)
+      ! Wake element property flags
+      COMMON/WIN/IPW(8000)
+      COMMON/WINTER/IPROPW(8000)
+      ! Body panel property flags
+      COMMON/PPG/IPROP(8000)
+
+      !-----------------------------------------------------------------------
+      ! Local Variables
+      !-----------------------------------------------------------------------
+      INTEGER :: I, J, K, L, M, LL, KL
+      INTEGER :: MK, MKK, K1, K2, KK1, KK2
+      INTEGER :: IT1, II
+      INTEGER :: ADJACENT_PANEL_IDX
+      INTEGER :: ICHECK(8000) ! Flag to prevent processing a panel twice
+      LOGICAL :: IS_TRAILING_EDGE
+      REAL(KIND=4) :: CIRCULATION_MOD
+
+      !=======================================================================
+      ! STEP 1: INITIALIZATION
+      !=======================================================================
+
+      ! Initialize counters for new wake elements and points
+      NPW = 0 ! Number of Panel Wake elements
+      II = 0  ! Counter for new wake grid points
+
+      ! The first set of wake coordinates (attached to the body) are stored
+      ! at index ITER+1. We will convect them to index ITER later.
+      IT1 = ITER + 1
+
+      ! Initialize marker arrays.
+      ! MARKW stores the index of the wake grid point associated with a body grid point.
+      ! A value of 0 means the body point is not yet part of the wake.
+      DO I = 1, NGRID
+      MARKW(I) = 0
+      END DO
+
+      ! ICHECK flags which panels have already been accounted for (as an adjacent panel).
+      DO I = 1, NPAN
+      ICHECK(I) = 0
+      END DO
+
+      !=======================================================================
+      ! STEP 2: FIND TRAILING EDGES AND CREATE NEW WAKE ELEMENTS
+      !
+      ! This is the most complex part. We loop through all panels and their
+      ! edges. If an edge is a "trailing edge" and hasn't been processed,
+      ! we create a new wake element (a vortex segment) shedding from it.
+      !=======================================================================
+
+      ! --- Primary Loop to find Trailing Edges ---
+      main_shedding_loop: DO J = 1, NPAN
+      ! If this panel was already processed as an adjacent panel, skip it.
+      IF (ICHECK(J) == 1) CYCLE main_shedding_loop
+
+      ! Determine if the panel is a triangle (3 vertices) or a quadrilateral (4).
+      IF (IC(J,3) == IC(J,4)) THEN
+      MK = 3
+      ELSE
+      MK = 4
+      END IF
+
+      ! Loop through all edges of the current panel 'J'.
+      edge_loop_1: DO K = 1, MK
+      ! Define the start (K1) and end (K2) vertices of the current edge.
+      K1 = K
+      K2 = K + 1
+      IF (K == MK) K2 = 1 ! Handle the last edge that wraps around.
+
+      ! --- Condition to check if this is a trailing edge ---
+      ! Condition 1: Both vertices of the edge must be marked as part of the trailing edge line.
+      ! Condition 2: A wake element must not have already been created from this edge.
+      IS_TRAILING_EDGE = (MARK(IC(J,K1)) /= 0 .AND. 
+     1 MARK(IC(J,K2)) /= 0) .AND. 
+     2 (MARKW(IC(J,K1)) == 0 .OR. MARKW(IC(J,K2)) == 0)
+
+      IF (IS_TRAILING_EDGE) THEN
+      ! We found a valid trailing edge to shed a wake from.
+      ! Now, perform the shedding procedure for this edge.
+
+      ! --- Find the panel on the other side of this trailing edge ---
+      ADJACENT_PANEL_IDX = 0
+      search_adjacent_loop: DO L = J + 1, NPAN
+      ! Determine if panel L is a triangle or quad.
+      IF (IC(L,3) == IC(L,4)) THEN
+      MKK = 3
+      ELSE
+      MKK = 4
+      END IF
+      KK1 = 0
+      KK2 = 0
+      ! Check if panel L shares the same two vertices K1 and K2.
+      DO M = 1, MKK
+      IF (IC(L,M) == IC(J,K1)) KK1 = M
+      IF (IC(L,M) == IC(J,K2)) KK2 = M
+      END DO
+
+      ! If both vertices were found, we've found the adjacent panel.
+      IF (KK1 /= 0 .AND. KK2 /= 0) THEN
+      ADJACENT_PANEL_IDX = L
+      ICHECK(ADJACENT_PANEL_IDX) = 1 ! Mark it as processed.
+      EXIT search_adjacent_loop
+      END IF
+      END DO search_adjacent_loop
+
+
+      ! --- Create wake grid points at the vertices of the trailing edge (if they don't exist) ---
+      ! For the first vertex (K1)
+      IF (MARKW(IC(J,K1)) == 0) THEN
+      II = II + 1 ! Increment total wake point count
+      MARKW(IC(J,K1)) = II ! Link body point to wake point
+      IPW(II) = 1
+      IF (IPROP(J) == 2) IPW(II) = 2
+      ! Store initial coordinates and node index
+      X1X(II) = X(IC(J,K1))
+      Y1Y(II) = Y(IC(J,K1))
+      Z1Z(II) = Z(IC(J,K1))
+      NC(II)  = IC(J,K1)
+      ! Place the new wake point at the trailing edge for the first step
+      XW(IT1,II) = X(IC(J,K1))
+      YW(IT1,II) = Y(IC(J,K1))
+      ZW(IT1,II) = Z(IC(J,K1))
+      END IF
+
+      ! For the second vertex (K2)
+      IF (MARKW(IC(J,K2)) == 0) THEN
+      II = II + 1 ! Increment total wake point count
+      MARKW(IC(J,K2)) = II ! Link body point to wake point
+      IPW(II) = 1
+      IF (IPROP(J) == 2) IPW(II) = 2
+      ! Store initial coordinates and node index
+      X1X(II) = X(IC(J,K2))
+      Y1Y(II) = Y(IC(J,K2))
+      Z1Z(II) = Z(IC(J,K2))
+      NC(II)  = IC(J,K2)
+      ! Place the new wake point at the trailing edge for the first step
+      XW(IT1,II) = X(IC(J,K2))
+      YW(IT1,II) = Y(IC(J,K2))
+      ZW(IT1,II) = Z(IC(J,K2))
+      END IF
+
+      ! --- Create the new wake element and calculate its circulation ---
+      NPW = NPW + 1 ! Increment wake element count
+
+      ! The strength of the shed wake vortex is based on the circulation
+      ! of the panels meeting at the trailing edge (Kelvin's Theorem).
+      CW(ITER,NPW) = C(J)
+      IF ((K2 - K1) == (MK - 1)) CW(ITER,NPW) = -C(J)
+
+      ! Adjust circulation based on the adjacent panel's contribution
+      IF (ADJACENT_PANEL_IDX /= 0) THEN
+      ! This logic adjusts the circulation strength based on the relative
+      ! orientation of the edge in the two adjacent panels.
+      IF ((KK2 < KK1) .AND. ((KK1 - KK2) == 1)) THEN
+         CIRCULATION_MOD = -C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 < KK1) .AND. ((KK1 - KK2) == (MKK - 1))) THEN
+         CIRCULATION_MOD = +C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 > KK1) .AND. ((KK2 - KK1) == 1)) THEN
+         CIRCULATION_MOD = +C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 > KK1) .AND. ((KK2 - KK1) == (MKK - 1))) THEN
+         CIRCULATION_MOD = -C(ADJACENT_PANEL_IDX)
+      ELSE
+         CIRCULATION_MOD = 0.0
+      END IF
+      CW(ITER,NPW) = CW(ITER,NPW) + CIRCULATION_MOD
+      END IF
+
+      ! Store the connectivity of the new wake element
+      ICW(NPW,1) = MARKW(IC(J,K1))
+      ICW(NPW,2) = MARKW(IC(J,K2))
+
+      ! Store property flag for the new wake element
+      IPROPW(NPW) = 0
+      IF (IPROP(J) == 2) IPROPW(NPW) = 1
+
+      ! Since we've processed an edge for this panel, we can move to the next panel.
+      EXIT edge_loop_1
+      END IF
+      END DO edge_loop_1
+      END DO main_shedding_loop
+
+      ! Set the total number of wake grid points created
+      NGW = II
+
+      !=======================================================================
+      ! STEP 3: SECONDARY SWEEP FOR INTERNAL WAKE EDGES
+      !
+      ! This loop handles more complex cases, like wing-body junctions, where
+      ! an edge might connect two existing wake points but wasn't created as a
+      ! wake element in the first pass.
+      !=======================================================================
+      secondary_sweep_loop: DO I = 1, NPAN
+      ! Skip panels that were already handled as adjacent panels
+      IF (ICHECK(I) == 1) CYCLE secondary_sweep_loop
+
+      IF (IC(I,3) == IC(I,4)) THEN; MK = 3; ELSE; MK = 4; END IF
+
+      edge_loop_2: DO K = 1, MK
+      K1 = K
+      K2 = K + 1
+      IF (K == MK) K2 = 1
+
+      ! Check if this edge connects two points that are ALREADY part of the wake
+      IF (MARKW(IC(I,K1)) * MARKW(IC(I,K2)) /= 0) THEN
+      ! Now, check if this wake connection already exists
+      DO L = 1, NPW
+      IF ((ICW(L,1) == MARKW(IC(I,K1))) .AND. 
+     1 (ICW(L,2) == MARKW(IC(I,K2)))) THEN
+      CYCLE edge_loop_2 ! It exists, so skip to the next edge
+      END IF
+      END DO
+
+      ! If we are here, the connection does NOT exist, so we must create it.
+      ! This logic is identical to the main loop's creation process.
+      NPW = NPW + 1
+
+      ! Find the adjacent panel
+      ADJACENT_PANEL_IDX = 0
+      find_adjacent_2: DO LL = I + 1, NPAN
+      IF (IC(LL,3) == IC(LL,4)) THEN; MKK = 3; ELSE; MKK = 4; END IF
+      KK1 = 0; KK2 = 0
+      DO M = 1, MKK
+      IF (IC(LL,M) == IC(I,K1)) KK1 = M
+      IF (IC(LL,M) == IC(I,K2)) KK2 = M
+      END DO
+      IF (KK1 /= 0 .AND. KK2 /= 0) THEN
+      ADJACENT_PANEL_IDX = LL
+      ICHECK(ADJACENT_PANEL_IDX) = 1
+      EXIT find_adjacent_2
+      END IF
+      END DO find_adjacent_2
+
+      ! Calculate circulation
+      CW(ITER,NPW) = C(I)
+      IF ((K2 - K1) == (MK - 1)) THEN
+         CW(ITER,NPW) = -C(I)
+      END IF
+      IF (ADJACENT_PANEL_IDX /= 0) THEN
+      IF ((KK2 < KK1) .AND. ((KK1 - KK2) == 1)) THEN
+         CIRCULATION_MOD = -C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 < KK1) .AND. ((KK1 - KK2) == (MKK - 1))) THEN
+         CIRCULATION_MOD = +C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 > KK1) .AND. ((KK2 - KK1) == 1)) THEN
+         CIRCULATION_MOD = +C(ADJACENT_PANEL_IDX)
+      ELSE IF ((KK2 > KK1) .AND. ((KK2 - KK1) == (MKK - 1))) THEN
+         CIRCULATION_MOD = -C(ADJACENT_PANEL_IDX)
+      ELSE
+         CIRCULATION_MOD = 0.0
+      END IF
+      CW(ITER,NPW) = CW(ITER,NPW) + CIRCULATION_MOD
+      END IF
+
+      ! Store connectivity and properties
+      ICW(NPW,1) = MARKW(IC(I,K1))
+      ICW(NPW,2) = MARKW(IC(I,K2))
+      IPROPW(NPW) = 0
+      IF (IPROP(I) == 2) IPROPW(NPW) = 1
+      END IF
+      END DO edge_loop_2
+      END DO secondary_sweep_loop
+
+      !=======================================================================
+      ! STEP 4: CONVECT THE ENTIRE WAKE
+      !
+      ! Move all wake points (new and old) downstream by VINIT * DT.
+      !=======================================================================
+
+      ! Convect the brand new wake points from the trailing edge (at time ITER)
+      ! to their first position in the wake.
+      DO KL = 1, NGW
+      XW(ITER,KL) = X1X(KL) + VINIT*DT
+      YW(ITER,KL) = Y1Y(KL)
+      ZW(ITER,KL) = Z1Z(KL)
+      END DO
+
+      ! Convect all previously existing wake points from older time steps.
+      IF (ITER > 1) THEN
+      DO I = 1, ITER - 1
+      DO J = 1, NGW
+      XW(I,J) = XW(I,J) + VINIT*DT
+      ! Y and Z convection is currently zero in this model
+      YW(I,J) = YW(I,J)
+      ZW(I,J) = ZW(I,J)
+      END DO
+      END DO
+      END IF
+
       RETURN
-      END
-
-
-      SUBROUTINE ANALGEO(NPAN)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/ANPORT/DS(2000)
-      DO 10 I=1,NPAN
-      IF(IC(I,3).NE.IC(I,4)) GO TO 5
-      GX(I)=(X(IC(I,1))+X(IC(I,2))+X(IC(I,3)))/3.
-      GY(I)=(Y(IC(I,1))+Y(IC(I,2))+Y(IC(I,3)))/3.
-      GZ(I)=(Z(IC(I,1))+Z(IC(I,2))+Z(IC(I,3)))/3.
-      GO TO 6
-    5 GX(I)=(X(IC(I,1))+X(IC(I,2))+X(IC(I,3))+X(IC(I,4)))/4.
-      GY(I)=(Y(IC(I,1))+Y(IC(I,2))+Y(IC(I,3))+Y(IC(I,4)))/4.
-      GZ(I)=(Z(IC(I,1))+Z(IC(I,2))+Z(IC(I,3))+Z(IC(I,4)))/4.
-    6 X13=X(IC(I,1))-X(IC(I,3))
-      Y13=Y(IC(I,1))-Y(IC(I,3))
-      Z13=Z(IC(I,1))-Z(IC(I,3))
-      X42=X(IC(I,4))-X(IC(I,2))
-      Y42=Y(IC(I,4))-Y(IC(I,2))
-      Z42=Z(IC(I,4))-Z(IC(I,2))
-      if(i.le.1) print *, gx(i),gy(i),gz(i)
-      XX=Y13*Z42-Z13*Y42
-      YY=Z13*X42-X13*Z42
-      ZZ=X13*Y42-Y13*X42
-      ANORM=SQRT(XX**2+YY**2+ZZ**2)
-      ANX(I)=-XX/ANORM
-      ANY(I)=-YY/ANORM
-      ANZ(I)=-ZZ/ANORM
-      X12=X(IC(I,2))-X(IC(I,1))
-      Y12=Y(IC(I,2))-Y(IC(I,1))
-      Z12=Z(IC(I,2))-Z(IC(I,1))
-      X14=X(IC(I,4))-X(IC(I,1))
-      Y14=Y(IC(I,4))-Y(IC(I,1))
-      Z14=Z(IC(I,4))-Z(IC(I,1))
-      XX=Y13*Z12-Z13*Y12
-      YY=Z13*X12-X13*Z12
-      ZZ=X13*Y12-Y13*X12
-      DS1=0.5*SQRT(XX**2+YY**2+ZZ**2)
-      XX=Y13*Z14-Z13*Y14
-      YY=Z13*X14-X13*Z14
-      ZZ=X13*Y14-Y13*X14
-      DS2=0.5*SQRT(XX**2+YY**2+ZZ**2)
-      DS(I)=DS1+DS2
-      XM=(X(IC(I,1))+X(IC(I,2)))/2.
-      YM=(Y(IC(I,1))+Y(IC(I,2)))/2.
-      ZM=(Z(IC(I,1))+Z(IC(I,2)))/2.
-      XX=XM-GX(I)
-      YY=YM-GY(I)
-      ZZ=ZM-GZ(I)
-      ANORM=SQRT(XX**2+YY**2+ZZ**2)
-      ALX(I)=XX/ANORM
-      ALY(I)=YY/ANORM
-      ALZ(I)=ZZ/ANORM
-      XX=ALY(I)*ANZ(I)-ALZ(I)*ANY(I)
-      YY=ALZ(I)*ANX(I)-ALX(I)*ANZ(I)
-      ZZ=ALX(I)*ANY(I)-ALY(I)*ANX(I)
-      ANORM=SQRT(XX**2+YY**2+ZZ**2)
-      ATX(I)=XX/ANORM
-      ATY(I)=YY/ANORM
-      ATZ(I)=ZZ/ANORM
-   10 CONTINUE
-      RETURN
-      END
-
-
-      SUBROUTINE VORCALC(VINIT,NPAN,ITER,NPW,NSYM,VAIP,NGRND)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/VOW/XX(2000),YY(2000),ZZ(2000)
-      COMMON/VG1/A(3100,3100)
-      COMMON/VG2/B(2000)
-      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,
-     1VVX,VVY,VVZ
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/GVV/XP(2000)
-      COMMON/PPG/IPROP(2000)
-      IF(ITER.NE.0) GO TO 25
-      DO 22 I=1,NPAN
-      DO 21 J=1,NPAN
-      A(I,J)=0.
-   21 CONTINUE
-   22 CONTINUE
-      DO 20 I=1,NPAN
-      XG=GX(I)
-      YG=GY(I)
-      ZG=GZ(I)
-      NG=0
-    6 DO 10 J=1,NPAN
-      NA=0
-      X1=X(IC(J,1))
-      Y1=Y(IC(J,1))
-      Z1=Z(IC(J,1))
-      X2=X(IC(J,2))
-      Y2=Y(IC(J,2))
-      Z2=Z(IC(J,2))
-      X3=X(IC(J,3))
-      Y3=Y(IC(J,3))
-      Z3=Z(IC(J,3))
-      X4=X(IC(J,4))
-      Y4=Y(IC(J,4))
-      Z4=Z(IC(J,4))
-      IF(NG.EQ.0) GO TO 11
-      Z1=-Z1
-      Z2=-Z2
-      Z3=-Z3
-      Z4=-Z4
-   11 CALL VORTEX
-      A(I,J)=A(I,J)+(VVX*ANX(I)+VVY*ANY(I)+VVZ*ANZ(I))*((-1)**NA)*
-     1(-1)**NG
-      IF(NSYM.EQ.0) GO TO 10
-      IF(NA.EQ.1) GO TO 10
-      NA=1
-      Y1=-Y1
-      Y2=-Y2
-      Y3=-Y3
-      Y4=-Y4
-      GO TO 11
-   10 CONTINUE
-      IF(NGRND.EQ.0) GO TO 20
-      IF(NG.EQ.1) GO TO 20
-      NG=1
-      GO TO 6
-   20 CONTINUE
-   25 DO 30 II=1,NPAN
-      XG=GX(II)
-      YG=GY(II)
-      ZG=GZ(II)
-      VXV=0.
-      VYV=0.
-      VZV=0.
-      KPV=1
-      IF(IPROP(II).EQ.14) KPV=0
-      IF(ITER.EQ.0) GO TO 26
-      CALL VELWAK(ITER,NPW,NSYM,NGRND,XG,YG,ZG,VXV,
-     1VYV,VZV)
-   26 B(II)=-(VINIT*KPV+VXV)*ANX(II)-VYV*ANY(II)-VZV*
-     1ANZ(II)+VAIP
-   30 CONTINUE
-      CALL SVDBK(NPAN,ITER)
-      RETURN
-      END
-
-
-
-      SUBROUTINE VORTEX
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VVOR/GX,GY,GZ,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,
-     1VX,VY,VZ
-      DIMENSION XX(4),YY(4),ZZ(4)
-      PI=3.14159
-      ZERO=1.D-12
-      XX(1)=X1
-      YY(1)=Y1
-      ZZ(1)=Z1
-      XX(2)=X2
-      YY(2)=Y2
-      ZZ(2)=Z2
-      XX(3)=X3
-      YY(3)=Y3
-      ZZ(3)=Z3
-      XX(4)=X4
-      YY(4)=Y4
-      ZZ(4)=Z4
-      VX=0.
-      VY=0.
-      VZ=0.
-      DO 80 KK=1,4
-      KIK=KK+1
-      IF (KK.EQ.4) KIK=1
-      ABX=XX(KIK)-XX(KK)
-      ABY=YY(KIK)-YY(KK)
-      ABZ=ZZ(KIK)-ZZ(KK)
-      AB=SQRT(ABX**2+ABY**2+ABZ**2)
-      IF(AB.LE.ZERO) GO TO 173
-      APX=GX-XX(KK)
-      APY=GY-YY(KK)
-      APZ=GZ-ZZ(KK)
-      AP=SQRT(APX**2+APY**2+APZ**2)
-      IF(AP.LE.ZERO) GO TO 173
-      COSTH1=(ABX*APX+ABY*APY+ABZ*APZ)/(AB*AP)
-      BPX=GX-XX(KIK)
-      BPY=GY-YY(KIK) 
-      BPZ=GZ-ZZ(KIK)
-      BP=SQRT(BPX**2+BPY**2+BPZ**2)
-      IF(BP.LE.ZERO) GO TO 173
-      COSTH2=-(ABX*BPX+ABY*BPY+ABZ*BPZ)/(AB*BP)
-      V1=APY*BPZ-APZ*BPY
-      V2=APZ*BPX-APX*BPZ
-      V3=APX*BPY-APY*BPX
-      H=SQRT(V1**2+V2**2+V3**2)/AB
-C      IF(ABS(COSTH1+COSTH2).GT.ZERO.AND.H.GT.ZERO) GO TO 73
-      IF(H.GT.ZERO) GO TO 73
-  173 VPX=0.
-      VPY=0.
-      VPZ=0.
-      GO TO 72
-   73 VP=(COSTH1+COSTH2)/(4*PI*H)
-      ABPX=ABY*APZ-ABZ*APY
-      ABPY=ABZ*APX-ABX*APZ
-      ABPZ=ABX*APY-ABY*APX
-      ABP=SQRT(ABPX**2+ABPY**2+ABPZ**2)
-      VPX=VP*ABPX/ABP
-      VPY=VP*ABPY/ABP
-      VPZ=VP*ABPZ/ABP
-   72 VX=VX+VPX
-      VY=VY+VPY
-      VZ=VZ+VPZ
-   80 CONTINUE
-      RETURN
-      END
-
-
-      SUBROUTINE SVDCMP(N)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VG1/A(3100,3100)
-      COMMON/SSV/V(3100,3100),W(2000)
-      DIMENSION RV1(2000)
-      M=N
-      G=0.
-      SCALE=0.
-      ANORM=0.
-      DO 25 I=1,N    
-      L=I+1
-      RV1(I)=SCALE*G
-      G=0.
-      S=0.
-      SCALE=0.
-      IF(I.GT.M) GO TO 161
-      DO 11 K=I,M
-      SCALE=SCALE+ABS(A(K,I))
-   11 CONTINUE
-      IF(SCALE.EQ.0.) GO TO 161
-      DO 12 K=I,M
-      A(K,I)=A(K,I)/SCALE
-      S=S+A(K,I)*A(K,I)
-   12 CONTINUE
-      F=A(I,I)
-      G=-SIGN(SQRT(S),F)
-      H=F*G-S
-      A(I,I)=F-G
-      DO 15 J=L,N
-      S=0.
-      DO 13 K=I,M
-      S=S+A(K,I)*A(K,J)
-   13 CONTINUE
-      F=S/H
-      DO 14 K=I,M
-      A(K,J)=A(K,J)+F*A(K,I)
-   14 CONTINUE
-   15 CONTINUE
-      DO 16 K=I,M
-      A(K,I)=SCALE*A(K,I)
-   16 CONTINUE
-  161 CONTINUE
-      W(I)=SCALE*G
-      G=0.
-      S=0.
-      SCALE=0.
-      IF((I.LE.M).AND.(I.NE.N)) GO TO 162
-      GO TO 124
-  162 DO 17 K=L,N
-      SCALE=SCALE+ABS(A(I,K))
-   17 CONTINUE
-      IF(SCALE.EQ.0.) GO TO 124
-      DO 18 K=L,N
-      A(I,K)=A(I,K)/SCALE
-      S=S+A(I,K)*A(I,K)
-   18 CONTINUE
-      F=A(I,L)
-      G=-SIGN(SQRT(S),F)
-      H=F*G-S
-      A(I,L)=F-G
-      DO 19 K=L,N
-      RV1(K)=A(I,K)/H
-   19 CONTINUE
-      DO 23 J=L,M
-      S=0.
-      DO 21 K=L,N
-      S=S+A(J,K)*A(I,K)
-   21 CONTINUE
-      DO 22 K=L,N
-      A(J,K)=A(J,K)+S*RV1(K)
-   22 CONTINUE
-   23 CONTINUE
-      DO 24 K=L,N
-      A(I,K)=SCALE*A(I,K)
-   24 CONTINUE
-  124 CONTINUE
-      ANORM=MAX(ANORM,(ABS(W(I))+ABS(RV1(I))))
-   25 CONTINUE
-      DO 32 I=N,1,-1  
-      IF(I.GE.N) GO TO 131
-      IF(G.EQ.0.) GO TO 129
-      DO 26 J=L,N
-      V(J,I)=(A(I,J)/A(I,L))/G
-   26 CONTINUE
-      DO 29 J=L,N
-      S=0.
-      DO 27 K=L,N
-      S=S+A(I,K)*V(K,J)
-   27 CONTINUE
-      DO 28 K=L,N
-      V(K,J)=V(K,J)+S*V(K,I)
-   28 CONTINUE
-   29 CONTINUE
-  129 CONTINUE
-      DO 31 J=L,N
-      V(I,J)=0.
-      V(J,I)=0.
-   31 CONTINUE
-  131 CONTINUE
-      V(I,I)=1.
-      G=RV1(I)
-      L=I
-   32 CONTINUE
-      DO 39 I=MIN(M,N),1,-1      
-      L=I+1
-      G=W(I)
-      DO 33 J=L,N
-      A(I,J)=0.
-   33 CONTINUE
-      IF(G.EQ.0.) GO TO 137
-      G=1./G
-      DO 36 J=L,N
-      S=0.
-      DO 34 K=L,M
-      S=S+A(K,I)*A(K,J)
-   34 CONTINUE
-      F=(S/A(I,I))*G
-      DO 35 K=I,M
-      A(K,J)=A(K,J)+F*A(K,I)
-   35 CONTINUE
-   36 CONTINUE
-      DO 37 J=I,M
-      A(J,I)=A(J,I)*G
-   37 CONTINUE
-      GO TO 138
-  137 DO 38 J=I,M
-      A(J,I)=0.
-   38 CONTINUE
-  138 A(I,I)=A(I,I)+1.
-   39 CONTINUE
-      DO 49 K=N,1,-1
-      DO 48 ITS=1,30
-      DO 41 L=K,1,-1
-      NM=L-1
-      IF((ABS(RV1(L))+ANORM).EQ.ANORM) GO TO 2
-      IF((ABS(W(NM))+ANORM).EQ.ANORM) GO TO 1
-   41 CONTINUE
-    1 C=0.
-      S=1.
-      DO 43 I=L,K
-      F=S*RV1(I)
-      RV1(I)=C*RV1(I)
-      IF((ABS(F)+ANORM).EQ.ANORM) GO TO 2
-      G=W(I)
-      H=PYTHAG(F,G)
-      PRINT *, 'H'
-      W(I)=H
-      H=1./H
-      C=G*H
-      S=-F*H
-      DO 42 J=1,M
-      Y=A(J,NM)
-      Z=A(J,I)
-      A(J,NM)=Y*C+Z*S
-      A(J,I)=-Y*S+Z*C
-   42 CONTINUE
-   43 CONTINUE
-    2 Z=W(K)
-      IF(L.NE.K) GO TO 244
-      IF(Z.GE.0.) GO TO 144
-      W(K)=-Z
-      DO 44 J=1,N
-      V(J,K)=-V(J,K)
-   44 CONTINUE
-  144 CONTINUE
-      GO TO 3
-  244 CONTINUE
-      IF(ITS.EQ.30.) STOP 'NO CONVERGENCE IN SVD'
-      X=W(L)
-      NM=K-1
-      Y=W(NM)
-      G=RV1(NM)
-      H=RV1(K)
-      F=((Y-Z)*(Y+Z)+(G-H)*(G+H))/(2.*H*Y) 
-      abc=1.
-      G=PYTHAG(F,abc)
-      F=((X-Z)*(X+Z)+H*((Y/(F+SIGN(G,F)))-H))/X
-      C=1.
-      S=1.
-      DO 47 J=L,NM
-      I=J+1
-      G=RV1(I)
-      Y=W(I)
-      H=S*G
-      G=C*G
-      Z=PYTHAG(F,H)
-      RV1(J)=Z
-      C=F/Z
-      S=H/Z
-      F=X*C+G*S
-      G=-X*S+G*C
-      H=Y*S
-      Y=Y*C
-      DO 45 JJ=1,N
-      X=V(JJ,J)
-      Z=V(JJ,I)
-      V(JJ,J)=X*C+Z*S
-      V(JJ,I)=-X*S+Z*C
-   45 CONTINUE
-      Z=PYTHAG(F,H)
-      W(J)=Z
-      IF(Z.EQ.0.) GO TO 145
-      Z=1./Z
-      C=F*Z
-      S=H*Z
-  145 CONTINUE
-      F=C*G+S*Y
-      X=-S*G+C*Y
-      DO 46 JJ=1,M
-      Y=A(JJ,J)
-      Z=A(JJ,I)
-      A(JJ,J)=Y*C+Z*S
-      A(JJ,I)=-Y*S+Z*C
-   46 CONTINUE
-   47 CONTINUE
-      RV1(L)=0.
-      RV1(K)=F
-      W(K)=X
-   48 CONTINUE
-    3 CONTINUE
-   49 CONTINUE
-      do 148 i=1,n
-      write(21,*) 'w',i,w(i)
-  148 CONTINUE
-      RETURN
-      END
-
-
-      FUNCTION PYTHAG(A,B)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      ABSA=ABS(A)
-      ABSB=ABS(B)
-      IF(ABSA.LE.ABSB) GO TO 10
-      PYTHAG=ABSA*SQRT(1.+(ABSB/ABSA)**2)
-      GO TO 30
-   10 IF(ABSB.NE.0.) GO TO 20
-      PYTHAG=0.
-      GO TO 30
-   20 PYTHAG=ABSB*SQRT(1.+(ABSA/ABSB)**2)
-   30 CONTINUE
-      RETURN
-      END
-
-
-      SUBROUTINE SVDBK(N,ITER)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VG1/U(3100,3100)
-      COMMON/SSV/V(3100,3100),W(2000)
-      COMMON/VG2/B(2000)
-      COMMON/GVV/X(2000)
-      DIMENSION TMP(2000)
-      PRINT *, 'IT',ITER,n
-      M=N
-      IF(ITER.NE.0) GO TO 6
-      CALL SVDCMP(N)
-      WMAX=0.
-      DO 2 J=1,N
-      IF(W(J).GT.WMAX) WMAX=W(J)
-    2 CONTINUE
-      WMIN=WMAX*1.D-12
-      DO 3 J=1,N
-      IF(W(J).LT.WMIN) W(J)=0.
-    3 CONTINUE
-    6 DO 12 J=1,N
-      S=0.
-      IF(W(J).EQ.0.) GO TO 111
-      DO 11 I=1,M
-      S=S+U(I,J)*B(I)
-   11 CONTINUE
-      S=S/W(J)
-  111 CONTINUE
-      TMP(J)=S
-   12 CONTINUE
-      DO 14 J=1,N
-      S=0.
-      DO 13 JJ=1,N
-      S=S+V(J,JJ)*TMP(JJ)
-   13 CONTINUE
-      X(J)=S
-   14 CONTINUE
-      RETURN
-      END
-
-
-
-
-      SUBROUTINE WAKE(ITER,VINIT,DT,NPAN,NPW,NGW,NGRID)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GVV/C(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      DIMENSION ICHECK(2000)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/CORECT/ X1X(2000),Y1Y(2000),Z1Z(2000)
-      COMMON/WAICOR/NC(2000)
-      COMMON/WIN/IPW(2000)
-      COMMON/WINTER/IPROPW(2000)
-      COMMON/PPG/IPROP(2000)
+      END SUBROUTINE WAKE
+      
+      SUBROUTINE WAKE_OLD(ITER,VINIT,DT,NPAN,NPW,NGW,NGRID)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GVV/C(8000),IPIV(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      DIMENSION ICHECK(8000)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/ANPORT/DS(8000)
+      COMMON/CORECT/ X1X(8000),Y1Y(8000),Z1Z(8000)
+      COMMON/WAICOR/NC(8000)
+      COMMON/WIN/IPW(8000)
+      COMMON/WINTER/IPROPW(8000)
+      COMMON/PPG/IPROP(8000)
       DO 5 I=1,NGRID
       MARKW(I)=0
     5 CONTINUE
@@ -747,9 +941,6 @@ C      IF(ABS(COSTH1+COSTH2).GT.ZERO.AND.H.GT.ZERO) GO TO 73
    19 NPW=NPW+1
       CW(ITER,NPW)=C(J)
       IF ((K2-K1).EQ.(MK-1)) CW(ITER,NPW)=-CW(ITER,NPW)
-      WRITE(21,*) 'J,C(J)',J,C(J)
-      WRITE(21,*) IC(J,1),IC(J,2),IC(J,3),IC(J,4)
-      WRITE(21,*) 'K1,K2,NPW,CW',K1,K2,NPW,CW(ITER,NPW)
       IF (LPAN.EQ.0) GOTO 90
       IF ((KK2.LT.KK1).AND.((KK1-KK2).EQ.1)) CW(ITER,NPW)=CW(ITER,NPW)
      *-C(LPAN)
@@ -759,10 +950,7 @@ C      IF(ABS(COSTH1+COSTH2).GT.ZERO.AND.H.GT.ZERO) GO TO 73
      *+C(LPAN)
       IF ((KK2.GT.KK1).AND.((KK2-KK1).EQ.(MKK-1))) CW(ITER,NPW)=
      *CW(ITER,NPW)-C(LPAN)
-      WRITE(21,*) 'LPAN,C(LPAN)',LPAN,C(LPAN)
-      WRITE(21,*) IC(LPAN,1),IC(LPAN,2),IC(LPAN,3),IC(LPAN,4)
-      WRITE(21,*) 'KK1,KK2,CW',KK1,KK2,CW(ITER,NPW)
-   90 WRITE(21,*)
+   90 CONTINUE
       ICW(NPW,1)=MARKW(IC(J,K1))
       ICW(NPW,2)=MARKW(IC(J,K2))
       IPROPW(NPW)=0
@@ -804,9 +992,6 @@ C      IF(ABS(COSTH1+COSTH2).GT.ZERO.AND.H.GT.ZERO) GO TO 73
   118 CONTINUE
       CW(ITER,NPW)=C(I)
       IF ((K2-K1).EQ.(MK-1)) CW(ITER,NPW)=-CW(ITER,NPW)
-      WRITE(21,*) 'J,C(J)',I,C(I)
-      WRITE(21,*) IC(I,1),IC(I,2),IC(I,3),IC(I,4)
-      WRITE(21,*) 'K1,K2,NPW,CW',K1,K2,NPW,CW(ITER,NPW)
       IF (LPAN.EQ.0) GOTO 190
       IF ((KK2.LT.KK1).AND.((KK1-KK2).EQ.1)) CW(ITER,NPW)=CW(ITER,NPW)
      *-C(LPAN)
@@ -816,10 +1001,7 @@ C      IF(ABS(COSTH1+COSTH2).GT.ZERO.AND.H.GT.ZERO) GO TO 73
      *+C(LPAN)
       IF ((KK2.GT.KK1).AND.((KK2-KK1).EQ.(MKK-1))) CW(ITER,NPW)=
      *CW(ITER,NPW)-C(LPAN)
-      WRITE(21,*) 'LPAN,C(LPAN)',LPAN,C(LPAN)
-      WRITE(21,*) IC(LPAN,1),IC(LPAN,2),IC(LPAN,3),IC(LPAN,4)
-      WRITE(21,*) 'KK1,KK2,CW',KK1,KK2,CW(ITER,NPW)
-  190 WRITE(21,*)
+  190 CONTINUE
       ICW(NPW,1)=MARKW(IC(I,K1))
       ICW(NPW,2)=MARKW(IC(I,K2))
       IPROPW(NPW)=0
@@ -853,166 +1035,172 @@ C      CALL IWCOR(ITER,NGW,NPAN)
 
 
       SUBROUTINE WAKCOR(NPAN,NGW,ITER)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/CORECT/ X1X(2000),Y1Y(2000),Z1Z(2000)
-      COMMON/WAICOR/NC(2000)
-      NP1=0
+      IMPLICIT REAL*4 (A-H,O-Z)
+C     COMMON BLOCKS ARE ASSUMED TO BE THE SAME
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/ANPORT/DS(8000)
+      COMMON/CORECT/ X1X(8000),Y1Y(8000),Z1Z(8000)
+      COMMON/WAICOR/NC(8000)
+
       DO 130 J=1,NGW
       DO 129 I=1,ITER
-      II=ITER+1-I
-      XXW=XW(II,J)
-      YYW=YW(II,J)
-      ZZW=ZW(II,J)
-      XXW1=XW(II+1,J)
-      YYW1=YW(II+1,J)
-      ZZW1=ZW(II+1,J)
-      NCC=NC(J)
-      CALL PENETR(NPAN,XXW,YYW,ZZW,XXW1,YYW1,ZZW1,NP1,NCC)
-      XW(II,J)=XXW
-      YW(II,J)=YYW
-      ZW(II,J)=ZZW
-  129 CONTINUE
-  130 CONTINUE
+          II=ITER+1-I
+          XXW=XW(II,J)
+          YYW=YW(II,J)
+          ZZW=ZW(II,J)
+          XXW1=XW(II+1,J)
+          YYW1=YW(II+1,J)
+          ZZW1=ZW(II+1,J)
+
+C         ORIGINAL CALL:
+         NCC=NC(J)
+         CALL PENETR_OLD(NPAN,XXW,YYW,ZZW,XXW1,YYW1,ZZW1,NP1,NCC)
+
+C         REPLACEMENT CALL:
+C         The line segment is from (XXW1, YYW1, ZZW1) to (XXW, YYW, ZZW).
+C         PENETR takes (start_point, end_point) and modifies the end_point.
+C          CALL PENETR(NPAN,XXW1,YYW1,ZZW1,XXW,YYW,ZZW,NC(J))
+
+          XW(II,J)=XXW
+          YW(II,J)=YYW
+          ZW(II,J)=ZZW
+ 129  CONTINUE
+ 130  CONTINUE
       RETURN
       END
 
 
+      SUBROUTINE PENETR_DEMI_WORKING(NPAN,XA,YA,ZA,XB,YB,ZB,NCC)
+         IMPLICIT REAL*4 (A-H,O-Z)
+         COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+         COMMON/GAVV/X(8000),Y(8000),Z(8000)
+         COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+         COMMON/ANPORT/DS(8000)
 
- 
-      SUBROUTINE CPAIP(ITER,NPAN,NPW,NSYM,VINIT,NGRND) 
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,VVX,
-     1VVY,VVZ
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/GVV/C(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/PPG/IPROP(2000)
-      DIMENSION XVV(2000),YVV(2000),ZVV(2000)
-      DO 80 I=1,NPAN
-      IF(IPROP(I).NE.2) GO TO 80
-      XGP=GX(I)
-      YGP=GY(I)
-      ZGP=GZ(I)
-      XG=XGP+1.3*ANX(I)
-      YG=YGP+1.3*ANY(I)
-      ZG=ZGP+1.3*ANZ(I)
-      XVV(I)=0.
-      YVV(I)=0.
-      ZVV(I)=0.
-      NG=0
-   20 DO 30 IK=1,NPAN
-      NA=0
-      X1=X(IC(IK,1))
-      Y1=Y(IC(IK,1))
-      Z1=Z(IC(IK,1))
-      X2=X(IC(IK,2))
-      Y2=Y(IC(IK,2))
-      Z2=Z(IC(IK,2))
-      X3=X(IC(IK,3))
-      Y3=Y(IC(IK,3))
-      Z3=Z(IC(IK,3))
-      X4=X(IC(IK,4))
-      Y4=Y(IC(IK,4))
-      Z4=Z(IC(IK,4))
-      IF(NG.EQ.0) GO TO 31
-      Z1=-Z1
-      Z2=-Z2
-      Z3=-Z3
-      Z4=-Z4
-   31 CALL VORTEX
-      XVV(I)=XVV(I)+VVX*C(IK)*((-1)**NA)*(-1)**NG
-      YVV(I)=YVV(I)+VVY*C(IK)*((-1)**NA)*(-1)**NG
-      ZVV(I)=ZVV(I)+VVZ*C(IK)*((-1)**NA)*(-1)**NG
-      IF(NSYM.EQ.0) GO TO 30
-      IF(NA.EQ.1) GO TO 30
-      NA=1
-      Y1=-Y1
-      Y2=-Y2
-      Y3=-Y3
-      Y4=-Y4
-      GO TO 31
-   30 CONTINUE
-      IF(NGRND.EQ.0) GO TO 40
-      IF(NG.EQ.1) GO TO 40
-      NG=1
-      GO TO 20
-   40 NG=0
-   41 DO 60 IK=1,ITER
-      DO 50 JK=1,NPW
-      NA=0
-      X1=XW(IK,ICW(JK,1))
-      Y1=YW(IK,ICW(JK,1))
-      Z1=ZW(IK,ICW(JK,1))
-      X2=XW(IK,ICW(JK,2))
-      Y2=YW(IK,ICW(JK,2))
-      Z2=ZW(IK,ICW(JK,2))
-      X3=XW(IK+1,ICW(JK,2))
-      Y3=YW(IK+1,ICW(JK,2))
-      Z3=ZW(IK+1,ICW(JK,2))
-      X4=XW(IK+1,ICW(JK,1))
-      Y4=YW(IK+1,ICW(JK,1))
-      Z4=ZW(IK+1,ICW(JK,1))
-      IF(NG.EQ.0) GO TO 51
-      Z1=-Z1
-      Z2=-Z2
-      Z3=-Z3
-      Z4=-Z4
-   51 CALL VORTEX
-      XVV(I)=XVV(I)+VVX*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      YVV(I)=YVV(I)+VVY*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      ZVV(I)=ZVV(I)+VVZ*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      IF(NSYM.EQ.0) GO TO 50
-      IF(NA.EQ.1) GO TO 50
-      NA=1
-      Y1=-Y1
-      Y2=-Y2
-      Y3=-Y3
-      Y4=-Y4
-      GO TO 51
-   50 CONTINUE
-   60 CONTINUE
-      IF(NGRND.EQ.0) GO TO 70
-      IF(NG.EQ.1) GO TO 70
-      NG=1
-      GO TO 41
-   70 CONTINUE              
-   80 CONTINUE  
-      DO 90 I=1,NPAN
-      IF(IPROP(I).NE.2) GO TO 90
-      VRX=XVV(I)+VINIT
-      VRY=YVV(I)
-      VRZ=ZVV(I)
-      VR=VRX**2+VRY**2+VRZ**2
-      CAIP=1.-VR/(VINIT**2)
-      WRITE(41,*) I,CAIP,VR
-   90 CONTINUE
-      RETURN
-      END
+         REAL P(3), PA(3), PB(3), PC(3), PD(3)
+         REAL AREA_1, AREA_2, AREA_3, AREA_4, PANEL_AREA
+         REAL NORMAL(3), K
+         REAL NOMINATOR, DENOMINATOR, TAU
+         REAL RI(3), R1(3), RR(3)
+
+         AB = SQRT((XB-XA)**2 + (YB-YA)**2 + (ZB-ZA)**2)
+
+
+C        CHECK THE PANELS IF THEY ARE PENETRATED
+         DO I = 1, NPAN
+
+
+C           CHECK IF THE CENTER OF THE PANEL AND THE DISTANCE FROM PB IS LARGER THAN PA-PB LENGTH
+            CP_TO_B = SQRT((GX(I)-XB)**2+(GY(I)-YB)**2+(GZ(I)-ZB)**2)
+
+            IF (CP_TO_B > AB) CYCLE ! Skip this panel if the center is farther than the line segment length
+
+C           CHECK IF THIS PANEL SHOULD BE SKIPPED
+            DO J = 1, 4
+               IF(IC(I,J).EQ.NCC) CYCLE ! CYCLE is modern Fortran for 'skip to next iteration'
+            END DO
+
+
+C           PLANE EQUATION BY THE NORMAL VECTOR
+            NORMAL = (/ANX(I), ANY(I), ANZ(I)/)
+C           PLANE EQUATION IS NORMAL(1)*X + NORMAL(2)*Y + NORMAL(3)*Z + K = 0
+C           FIND K
+            K = - (NORMAL(1)*GX(I) + NORMAL(2)*GY(I) + NORMAL(3)*GZ(I))
+C           CHECK IF THE LINE A-B INTERSECTS THE PLANE
+C           LINE EQUATION IS P = PA + TAU*(PB-PA)
+C           WE FIND THE VALUE OF TAU WHERE THE INTERSECTION OCCURS
+C           WE PLUG THE LINE EQUATION INTO THE PLANE EQUATION
+            NOMINATOR   = NORMAL(1)*    XA  +
+     1                    NORMAL(2)*    YA  +
+     2                    NORMAL(3)*    ZA  +
+     3                                   K   
+            DENOMINATOR = NORMAL(1)*(XB-XA) +
+     1                    NORMAL(2)*(YB-YA) +
+     2                    NORMAL(3)*(ZB-ZA)
+
+C           Avoid division by zero if line is parallel to the plane
+            IF (ABS(DENOMINATOR) .LT. 1E-9) CYCLE
+
+
+            TAU = NOMINATOR / DENOMINATOR
+C           IF TAU IS BETWEEN 0 AND 1, THEN THE LINE INTERSECTS THE PLANE
+            IF (TAU.GE.0.0 .AND. TAU.LE.1.0) THEN
+C              THE INTERSECTION POINT IS
+               P = PA + TAU*(PB-PA)
+
+C              FIND IF P IS IN THE PANEL
+               PA = (/X(IC(I,1)), Y(IC(I,1)), Z(IC(I,1))/)
+               PB = (/X(IC(I,2)), Y(IC(I,2)), Z(IC(I,2))/)
+               PC = (/X(IC(I,3)), Y(IC(I,3)), Z(IC(I,3))/)
+               PD = (/X(IC(I,4)), Y(IC(I,4)), Z(IC(I,4))/)
+C              FIND THE AREAS OF THE PANEL
+               PANEL_AREA = AREA(PA, PB, PC) + AREA(PC, PD, PA)
+
+C              FIND THE AREAS OF THE TRIANGLES FOR THE INTERSECTION
+               AREA_1 = AREA(PA, PB, P)
+               AREA_2 = AREA(PB, PC, P)
+               AREA_3 = AREA(PC, PD, P)
+               AREA_4 = AREA(PD, PA, P)
+               SUM_AREA = AREA_1 + AREA_2 + AREA_3 + AREA_4
+C              IF THE SUM OF THE AREAS OF THE TRIANGLES IS EQUAL TO THE
+C              AREA OF THE PANEL, THEN THE POINT IS INSIDE THE PANEL
+               IF (ABS(SUM_AREA - PANEL_AREA) .LT. 1E-6) THEN
+C                  PRINT *, 'PENETRATION DETECTED IN PANEL:', I
+C                  PRINT *, 'INTERSECTION POINT:', P
+                  PB = P
+
+
+C                  RESERVED FOR FUTURE USE
+C                 REFLECT THE PA TO PB FROM THE SURFACE
+C                 USING https://paulbourke.net/geometry/reflected/ NOTES ON REFLECTION
+C                  RI = P - PA
+C                  R1 = - RI
+C                  RR = RI - 2.0 * NORMAL*(DOT_PRODUCT(RI, NORMAL))
+C                 SO THE NEW PB IS THE REFLECTED POINT BUT THE LENGTH IS P-PB (WHAT'S LEFT BY THE PENETRATION)
+C                  PB = P + (RR/NORM2(RR))*NORM2(PB-P)
+C                  XB = PB(1)
+C                  YB = PB(2)
+C                  ZB = PB(3)
+               END IF
+            END IF
+         END DO
+      END SUBROUTINE
+
+      FUNCTION AREA2(P1, P2, P3)
+         IMPLICIT REAL*4 (A-H,O-Z)
+         REAL P1(3), P2(3), P3(3)
+         REAL AREA2
+
+         REAL VECTOR1(3), VECTOR2(3), CROSS_PROD(3)
+
+         VECTOR1 = P2 - P1
+         VECTOR2 = P3 - P2
+
+         CALL CROSS_PRODUCT(VECTOR1, VECTOR2, CROSS_PROD)
+
+         AREA2 = 0.5*NORM2(CROSS_PROD)
+
+      END FUNCTION
 
 
 
 
-      SUBROUTINE PENETR(NPAN,XW,YW,ZW,XW1,YW1,ZW1,NP1,NCC)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
+
+      SUBROUTINE PENETR_OLD(NPAN,XW,YW,ZW,XW1,YW1,ZW1,NP1,NCC)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
       DIMENSION XX(4),YY(4),ZZ(4),PX(4),PY(4),PV(4)
   124 INT=0
       DO 128 K=1,NPAN
@@ -1083,12 +1271,12 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       
       
       SUBROUTINE WAKINT(NPW,ITER)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/WINTER/IPROPW(2000)
-      DIMENSION WX(60,2000),WY(60,2000),WZ(60,2000) 
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/WINTER/IPROPW(8000)
+      DIMENSION WX(100,8000),WY(100,8000),WZ(100,8000) 
       DO 9 I=1,ITER+1
       DO 5 J=1,NPW
       WX(I,ICW(J,1))=XW(I,ICW(J,1))
@@ -1162,7 +1350,7 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       
       SUBROUTINE CROSS(XXA,YYA,ZZA,XXB,YYB,ZZB,X1,Y1,Z1,X2,Y2,Z2,
      1X3,Y3,Z3,X4,Y4,Z4,ANEWXW,ANEWYW,ANEWZW)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      IMPLICIT REAL*4 (A-H,O-Z)
       DIMENSION XI(4),YI(4),ZI(4),PR(4)
       ABX=XXB-XXA
       ABY=YYB-YYA
@@ -1234,10 +1422,10 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
      
     
       SUBROUTINE NEIBORG(NPAN,NGW)    
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/NEIB/KN(3100,3100)
-      COMMON/WAICOR/NC(2000)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/NEIB/KN(8000,8000)
+      COMMON/WAICOR/NC(8000)
       DO 6 I=1,NPAN
       KKI=4
       IF(IC(I,3).EQ.IC(I,4)) KKI=3
@@ -1260,17 +1448,17 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
 
 
       SUBROUTINE IWCOR(ITER,NGW,NPAN)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/AVV2/ATX(2000),ATY(2000),ATZ(2000),ALX(2000),ALY(2000),
-     1ALZ(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GW/XW(60,2000),YW(60,2000),ZW(60,2000)
-      COMMON/WAICOR/NC(2000)
-      COMMON/NEIB/KN(3100,3100)
-      DIMENSION ICHECK(2000)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/WAICOR/NC(8000)
+      COMMON/NEIB/KN(8000,8000)
+      DIMENSION ICHECK(8000)
       DO 80 J=1,NGW
       DX=XW(ITER,J)-X(NC(J))
       DY=YW(ITER,J)-Y(NC(J))
@@ -1291,24 +1479,26 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       IF(ICHECK(I).EQ.0) GO TO 70
       KKI=4
       IF(IC(I,3).EQ.IC(I,4)) KKI=3
-      IF((IK-2).LT.0) THEN
-      AX=X(IC(I,KKI))-X(IC(I,IK))
+
+      IF((IK-2).LT.0) GOTO 10
+      IF((IK-2).EQ.0) GOTO 20
+      IF((IK-2).GT.0) GOTO 30
+
+   10 AX=X(IC(I,KKI))-X(IC(I,IK))
       AY=Y(IC(I,KKI))-Y(IC(I,IK))
       AZ=Z(IC(I,KKI))-Z(IC(I,IK))
       BX=X(IC(I,2))-X(IC(I,IK))
       BY=Y(IC(I,2))-Y(IC(I,IK))
       BZ=Z(IC(I,2))-Z(IC(I,IK))
       GO TO 60
-      ELSE IF((IK-2).EQ.0) THEN
-      AX=X(IC(I,1))-X(IC(I,IK))
+   20 AX=X(IC(I,1))-X(IC(I,IK))
       AY=Y(IC(I,1))-Y(IC(I,IK))
       AZ=Z(IC(I,1))-Z(IC(I,IK))
       BX=X(IC(I,3))-X(IC(I,IK))
       BY=Y(IC(I,3))-Y(IC(I,IK))
       BZ=Z(IC(I,3))-Z(IC(I,IK))
       GO TO 60
-      ELSE IF((IK-2).GT.0) THEN
-      IF(KKI.NE.3) GO TO 40
+   30 IF(KKI.NE.3) GO TO 40
       AX=X(IC(I,2))-X(IC(I,IK))
       AY=Y(IC(I,2))-Y(IC(I,IK))
       AZ=Z(IC(I,2))-Z(IC(I,IK))
@@ -1316,7 +1506,6 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       BY=Y(IC(I,1))-Y(IC(I,IK))
       BZ=Z(IC(I,1))-Z(IC(I,IK))
       GO TO 60
-      END IF
    40 IF(IK.NE.3) GO TO 50
       AX=X(IC(I,2))-X(IC(I,IK))
       AY=Y(IC(I,2))-Y(IC(I,IK))
@@ -1349,9 +1538,8 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       ZZ=ZW(ITER,J)
       XX1=X(NC(J))
       YY1=Y(NC(J))
-      ZZ1=Z(NC(J))
       NCC=NC(J)
-      CALL PENETR(NPAN,XX,YY,ZZ,XX1,YY1,ZZ1,NP1,NCC)
+      CALL PENETR_OLD(NPAN,XX,YY,ZZ,XX1,YY1,ZZ1,NP1,NCC)
       XW(ITER,J)=XX
       YW(ITER,J)=YY
       ZW(ITER,J)=ZZ
@@ -1360,251 +1548,742 @@ c      IF((WN1.GT.0.).AND.(WN.GT.0.)) GO TO 127
       RETURN
       END
 
-
-      
-      SUBROUTINE VELWAK(ITER,NPW,NSYM,NGRND,GX,GY,GZ,XVV,
-     1YVV,ZVV)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,VVX,
-     1VVY,VVZ
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GW/WX(60,2000),WY(60,2000),WZ(60,2000)
-      NG=0
-      XVV=0.
-      YVV=0.
-      ZVV=0.
-      XG=GX
-      YG=GY
-      ZG=GZ
-   32 DO 60 IK=1,ITER
-      DO 50 JK=1,NPW
-      NA=0
-      X1=WX(IK,ICW(JK,1))
-      Y1=WY(IK,ICW(JK,1))
-      Z1=WZ(IK,ICW(JK,1))
-      X2=WX(IK,ICW(JK,2))
-      Y2=WY(IK,ICW(JK,2))
-      Z2=WZ(IK,ICW(JK,2))
-      X3=WX(IK+1,ICW(JK,2))
-      Y3=WY(IK+1,ICW(JK,2))
-      Z3=WZ(IK+1,ICW(JK,2))
-      X4=WX(IK+1,ICW(JK,1))
-      Y4=WY(IK+1,ICW(JK,1))
-      Z4=WZ(IK+1,ICW(JK,1))
-      IF(NG.EQ.0) GO TO 51
-      Z1=-Z1
-      Z2=-Z2
-      Z3=-Z3
-      Z4=-Z4
-   51 CALL VORTEX
-      XVV=XVV+VVX*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      YVV=YVV+VVY*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      ZVV=ZVV+VVZ*CW(IK,JK)*((-1)**NA)*(-1)**NG
-      IF(NSYM.EQ.0) GO TO 50
-      IF(NA.EQ.1) GO TO 50
-      NA=1
-      Y1=-Y1
-      Y2=-Y2
-      Y3=-Y3
-      Y4=-Y4
-      GO TO 51
-   50 CONTINUE
-   60 CONTINUE
-      IF(NGRND.EQ.0) GO TO 70
-      IF(NG.EQ.1) GO TO 70
-      NG=1
-      GO TO 32
-   70 CONTINUE
-      RETURN
-      END
+        SUBROUTINE PENETR(NPAN,XA,YA,ZA,XB,YB,ZB)
+         IMPLICIT NONE
 
 
-      
-      SUBROUTINE VELPAN(NPAN,NSYM,NGRND,GX,GY,GZ,XVV,YVV,ZVV) 
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,VVX,
-     1VVY,VVZ
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GVV/C(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      XG=GX
-      YG=GY
-      ZG=GZ
-      XVV=0.
-      YVV=0.
-      ZVV=0.
-      NG=0
-  501 DO 30 IK=1,NPAN
-      NA=0
-      X1=X(IC(IK,1))
-      Y1=Y(IC(IK,1))
-      Z1=Z(IC(IK,1))
-      X2=X(IC(IK,2))
-      Y2=Y(IC(IK,2))
-      Z2=Z(IC(IK,2))
-      X3=X(IC(IK,3))
-      Y3=Y(IC(IK,3))
-      Z3=Z(IC(IK,3))
-      X4=X(IC(IK,4))
-      Y4=Y(IC(IK,4))
-      Z4=Z(IC(IK,4))
-      IF(NG.EQ.0) GO TO 31
-      Z1=-Z1
-      Z2=-Z2
-      Z3=-Z3
-      Z4=-Z4
-   31 CALL VORTEX
-      XVV=XVV+VVX*C(IK)*((-1)**NA)*(-1)**NG
-      YVV=YVV+VVY*C(IK)*((-1)**NA)*(-1)**NG
-      ZVV=ZVV+VVZ*C(IK)*((-1)**NA)*(-1)**NG
-      IF(NSYM.EQ.0) GO TO 30
-      IF(NA.EQ.1) GO TO 30
-      NA=1
-      Y1=-Y1
-      Y2=-Y2
-      Y3=-Y3
-      Y4=-Y4
-      GO TO 31
-   30 CONTINUE
-      IF(NGRND.EQ.0) GO TO 311
-      IF(NG.EQ.1) GO TO 311
-      NG=1
-      GO TO 501
-  311 CONTINUE
-      RETURN
-      END
+         INTEGER, INTENT(IN) :: NPAN
+         REAL(4), INTENT(IN) :: XA, YA, ZA
+         REAL(4), INTENT(INOUT) :: XB, YB, ZB
 
-      
+         REAL(4) :: ANX(8000), ANY(8000), ANZ(8000)
+         REAL(4) :: GX(8000),   GY(8000),  GZ(8000)
+         REAL(4) :: X(8000),     Y(8000),   Z(8000)
+         INTEGER :: IC(8000,4), MARK(8000), MARKW(8000)
+         REAL(4) :: DS(8000)
 
-      SUBROUTINE WAKREL(ITER,NPAN,NGW,NPW,DT,NSYM,NGRND) 
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,VVX,
-     1VVY,VVZ
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GW/WX(60,2000),WY(60,2000),WZ(60,2000)
-      COMMON/GVV/C(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/WIN/IPW(2000)
-      DIMENSION XVV(60,2000),YVV(60,2000),ZVV(60,2000),XW(60,2000),
-     1YW(60,2000),ZW(60,2000)
-      DO 401 I=1,ITER  
-      DO 301 J=1,NGW
-      XW(I,J)=WX(I,J)
-      YW(I,J)=WY(I,J)
-      ZW(I,J)=WZ(I,J)
-  301 CONTINUE               
-  401 CONTINUE
-      DO 80 I=1,ITER
-      DO 70 J=1,NGW
-      XG=XW(I,J)
-      YG=YW(I,J)
-      ZG=ZW(I,J)
-      CALL VELPAN(NPAN,NSYM,NGRND,XG,YG,ZG,XVP,YVP,ZVP) 
-      CALL VELWAK(ITER,NPW,NSYM,NGRND,XG,YG,ZG,XVW,
-     1YVW,ZVW)
-      XVV(I,J)=XVP+XVW
-      YVV(I,J)=YVP+YVW
-      ZVV(I,J)=ZVP+ZVW
-   70 CONTINUE              
-   80 CONTINUE
-      DO 100 I=1,ITER
-      DO 90 J=1,NGW
-      XW(I,J)=XW(I,J)+XVV(I,J)*DT
-      YW(I,J)=YW(I,J)+YVV(I,J)*DT
-      ZW(I,J)=ZW(I,J)+ZVV(I,J)*DT
-   90 CONTINUE
-  100 CONTINUE
-      DO 106 I=1,ITER  
-      DO 115 J=1,NGW
-      WX(I,J)=XW(I,J)
-      WY(I,J)=YW(I,J)
-      WZ(I,J)=ZW(I,J)
-  115 CONTINUE               
-  106 CONTINUE
-      DO 157 I=1,ITER
-      DO 155 J=1,NGW
-      XW(I,J)=0.
-      YW(I,J)=0.
-      ZW(I,J)=0.
-  155 CONTINUE               
-  157 CONTINUE
-      RETURN
-      END      
-      
- 
-	SUBROUTINE AIRLOAD1(NPAN,VINIT,RHO,ALIFT,DRAG,SIDE,NSYM,ITER,
-	1NPW,NGRND)
-      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      COMMON/MWKVV/VXV(2000),VYV(2000),VZV(2000)
-      COMMON/AVV1/ANX(2000),ANY(2000),ANZ(2000),GX(2000),GY(2000),
-     1GZ(2000)
-      COMMON/GAVV/X(2000),Y(2000),Z(2000)
-      COMMON/GVV/C(2000)
-      COMMON/GRID/IC(2000,4),MARK(2000),MARKW(2000)
-      COMMON/ANPORT/DS(2000)
-      COMMON/MP/CP(2000)
-      COMMON/GW/WX(60,2000),WY(60,2000),WZ(60,2000)
-      COMMON/VW/CW(60,2000),ICW(2000,2)
-      DIMENSION IP(2)
-      COEF=0.5*RHO*VINIT**2 
-      KN=0
-      DRAG=0.
-      SIDE=0.
-      ALIFT=0.
-    5 DO 80 I=1,NPAN
-      KKI=4
-      IF(IC(I,3).EQ.IC(I,4)) KKI=3
-      DO 30 J=1,NPAN
-      IF(J.EQ.I) GO TO 30
-      KKJ=4
-      IF(IC(J,3).EQ.IC(J,4)) KKJ=3 
-      KP=0 
-      DO 20 IK=1,KKI 
-      DO 10 JK=1,KKJ
-      IF(IC(I,IK).NE.IC(J,JK)) GO TO 10 
-      KP=KP+1              
-      IP(KP)=IK
-      IF(KP.NE.2) GO TO 20  
-      IF(MARK(IC(I,IP(1))).EQ.1.AND.MARK(IC(I,IP(2))).EQ.1) GO TO 30
-      DX=X(IC(I,IP(2)))-X(IC(I,IP(1))) 
-      DY=Y(IC(I,IP(2)))-Y(IC(I,IP(1))) 
-      IF(KN.EQ.1) DY=-DY
-      DZ=Z(IC(I,IP(2)))-Z(IC(I,IP(1)))
-      IF(ABS(IP(2)-IP(1)).NE.(KKI-1)) GO TO 11
-      IF(IP(2).GT.IP(1)) GO TO 12
-      GO TO 13
-   11 IF(IP(2).GT.IP(1)) GO TO 13 
-   12 DY=-DY
-      DZ=-DZ     
-   13 ROC=RHO*(C(I)-C(J))*VINIT/2.
-      RC=RHO*(C(I)-C(J))
-      IF(KN.EQ.1) ROC=-ROC
-      SIDE=SIDE-ROC*DZ
-      ALIFT=ALIFT+ROC*DY  
-	GGX=GX(I)                        
-	GGY=GY(I)                        
-	GGZ=GZ(I)                        
-      CALL VELWAK(ITER,NPW,NSYM,NGRND,GGX,GGY,GGZ,XVV,YVV,ZVV)
-      DRAG=DRAG-RC*(XVV*DY-YVV*DX)
-      GO TO 30
-   10 CONTINUE   
-   20 CONTINUE
-   30 CONTINUE
-   80 CONTINUE   
-      IF(NSYM.EQ.0) GO TO 90
-      IF(KN.EQ.1) GO TO 90
-      KN=1
-      GO TO 5
-   90 CONTINUE
-      RETURN
-      END
-      
-      
-      
-      
-    
+         INTEGER :: I
+         INTEGER :: PENETRATED_ID(8000)
+         INTEGER :: PENETR_COUNTER
+         INTEGER :: MIN_DIST_ID
+         INTEGER :: ID
+
+         REAL(4) :: DIST_AB, CP_TO_A, CP_TO_B
+         REAL(4) :: NORMAL(3), K, TAU
+         REAL(4) :: NOMINATOR, DENOMINATOR
+         REAL(4) :: P(3), PA(3), PB(3), PC(3), PD(3)
+         REAL(4) :: PANEL_AREA,AREA_1,AREA_2,AREA_3,AREA_4,SUM_AREA
+         REAL(4) :: DIST_TO_PANEL, MIN_DIST, AREA
+
+
+
+
+         COMMON/AVV1/ANX,ANY,ANZ, GX, GY, GZ
+         COMMON/GAVV/X,Y,Z
+         COMMON/GRID/IC,MARK,MARKW
+         COMMON/ANPORT/DS
+
+C        WE NEED TO FIND THE NEAREST PANEL THAT GOT PENETRATED
+C        A LINE SEGMENT FROM POINT A TO POINT B MAY PENETRATE MULTIPLE PANELS
+C        WE WILL CHECK ALL PANELS AND FIND THE PANELS THAT ARE PENETRATED
+C        WE ARE GOING TO CHOOSE THE ONE THAT IS CLOSEST TO THE POINT A
+C        THE POINT A IS THE POINT WHERE THE LINE SEGMENT STARTS
+C        THE POINT B IS THE POINT WHERE THE LINE SEGMENT ENDS
+
+         PENETRATED_ID = 0
+         PENETR_COUNTER = 0
+C        LOOP OVER THE PANELS TO CHECK FOR PENETRATION
+         DO I = 1, NPAN
+            DIST_AB = SQRT((XB-XA)**2 + (YB-YA)**2 + (ZB-ZA)**2)
+            DIST_AB = DIST_AB + 0.1*DIST_AB ! ADD A SMALL TOLERANCE TO AVOID FLOATING POINT ERRORS
+C           IF THE CENTER OF THE PANEL IS FARTHER THAN THE LENGTH OF THE LINE SEGMENT, SKIP THIS PANEL
+            CP_TO_A = SQRT((GX(I)-XA)**2+(GY(I)-YA)**2+(GZ(I)-ZA)**2)
+            CP_TO_B = SQRT((GX(I)-XB)**2+(GY(I)-YB)**2+(GZ(I)-ZB)**2)
+            IF (CP_TO_A > DIST_AB .AND. CP_TO_B > DIST_AB) CYCLE
+
+C           FIND ALL THE PENETRATED PANELS
+C           PLANE EQUATION BY THE NORMAL VECTOR
+            NORMAL = (/ANX(I), ANY(I), ANZ(I)/)
+C           PLANE EQUATION IS NORMAL(1)*X + NORMAL(2)*Y + NORMAL(3)*Z + K = 0
+C           FIND K
+            K = - (NORMAL(1)*GX(I) + NORMAL(2)*GY(I) + NORMAL(3)*GZ(I))
+C           CHECK IF THE LINE A-B INTERSECTS THE PLANE
+C           LINE EQUATION IS P = PA + TAU*(PB-PA)
+C           WE FIND THE VALUE OF TAU WHERE THE INTERSECTION OCCURS
+C           WE PLUG THE LINE EQUATION INTO THE PLANE EQUATION
+            NOMINATOR   = NORMAL(1)*    XA  +
+     1                    NORMAL(2)*    YA  +
+     2                    NORMAL(3)*    ZA  +
+     3                                   K   
+            DENOMINATOR = NORMAL(1)*(XB-XA) +
+     1                    NORMAL(2)*(YB-YA) +
+     2                    NORMAL(3)*(ZB-ZA)
+
+C           Avoid division by zero if line is parallel to the plane
+            IF (ABS(DENOMINATOR) .LT. 1E-9) CYCLE
+
+
+            TAU = NOMINATOR / DENOMINATOR
+C           IF TAU IS BETWEEN 0 AND 1, THEN THE LINE INTERSECTS THE PLANE
+            IF (TAU.GE.0.0 .AND. TAU.LE.1.0) THEN
+C              THE INTERSECTION POINT IS
+               P = PA + TAU*(PB-PA)
+
+C              FIND IF P IS IN THE PANEL
+               PA = (/X(IC(I,1)), Y(IC(I,1)), Z(IC(I,1))/)
+               PB = (/X(IC(I,2)), Y(IC(I,2)), Z(IC(I,2))/)
+               PC = (/X(IC(I,3)), Y(IC(I,3)), Z(IC(I,3))/)
+               PD = (/X(IC(I,4)), Y(IC(I,4)), Z(IC(I,4))/)
+C              FIND THE AREAS OF THE PANEL
+               PANEL_AREA = AREA(PA, PB, PC) + AREA(PC, PD, PA)
+
+C              FIND THE AREAS OF THE TRIANGLES FOR THE INTERSECTION
+               AREA_1 = AREA(PA, PB, P)
+               AREA_2 = AREA(PB, PC, P)
+               AREA_3 = AREA(PC, PD, P)
+               AREA_4 = AREA(PD, PA, P)
+               SUM_AREA = AREA_1 + AREA_2 + AREA_3 + AREA_4
+C              IF THE SUM OF THE AREAS OF THE TRIANGLES IS EQUAL TO THE
+C              AREA OF THE PANEL, THEN THE POINT IS INSIDE THE PANEL
+               IF (ABS(SUM_AREA - PANEL_AREA) .LT. 1E-6) THEN
+                  PENETR_COUNTER = PENETR_COUNTER + 1
+                  PENETRATED_ID(PENETR_COUNTER) = I
+               END IF
+            END IF
+         END DO
+
+C      LOOP OVER THE PENETRATED PANELS AND FIND THE CLOSEST ONE
+         IF (PENETR_COUNTER > 0) THEN
+            MIN_DIST = 1E10
+            MIN_DIST_ID = 0
+            DO I = 1, PENETR_COUNTER
+               ID = PENETRATED_ID(I)
+               DIST_TO_PANEL = SQRT((GX(ID)-XA)**2 + 
+     1                              (GY(ID)-YA)**2 + 
+     2                              (GZ(ID)-ZA)**2)
+               IF (DIST_TO_PANEL < MIN_DIST) THEN
+                  MIN_DIST = DIST_TO_PANEL
+                  MIN_DIST_ID = ID
+               END IF
+            END DO
+
+C         NOW MOVE THE PB TO THE CENTER OF THE PENETRATED PANEL
+            IF (MIN_DIST_ID > 0) THEN
+               XB = GX(MIN_DIST_ID) + 0.1*ANX(MIN_DIST_ID)
+               YB = GY(MIN_DIST_ID) + 0.1*ANY(MIN_DIST_ID)
+               ZB = GZ(MIN_DIST_ID) + 0.1*ANZ(MIN_DIST_ID)
+            END IF
+         END IF
+      END SUBROUTINE
+
+      FUNCTION AREA(P1, P2, P3)
+         IMPLICIT REAL*4 (A-H,O-Z)
+         REAL P1(3), P2(3), P3(3)
+         REAL AREA
+
+         REAL VECTOR1(3), VECTOR2(3), CROSS_PROD(3)
+
+         VECTOR1 = P2 - P1
+         VECTOR2 = P3 - P2
+
+         CALL CROSS_PRODUCT(VECTOR1, VECTOR2, CROSS_PROD)
+
+         AREA = 0.5*NORM2(CROSS_PROD)
+
+      END FUNCTION
+
+            subroutine print_run_settings(ALF,BET,GAM,VINIT,EPS,
+     1DT,NSYM,NGRND,CGX,CGY,CGZ,WINGAREA,MAC)
+         implicit none
+         real(4) :: ALF, BET, GAM, VINIT, EPS, DT
+         real(4) :: CGX, CGY, CGZ, WINGAREA,MAC
+         real(4) :: PI
+         integer :: NSYM, NGRND
+
+         PI = 4.0*atan(1.0)
+
+         write (*,'(a)') "--------------------------"
+         write (*,'(a)') "Printing ROS Configuration"
+         write (*,'(a)') "Angles  (deg)"
+         write (*,'(a)') "Lengths (meters)"
+         write (*,'(a)') "Max Iterations : 100"
+         write (*,'(a)') "--------------------------"
+         write (*,'(a)') "Angles"
+         write (*,'(a,f10.3)') "   Yaw   : ", ALF*180/PI
+         write (*,'(a,f10.3)') "   Pitch : ", BET*180/PI
+         write (*,'(a,f10.3)') "   Roll  : ", GAM*180/PI
+         write (*,'(a)') "--------------------------"
+         write (*,'(a,f10.3)') "Wind Speed   : ", VINIT
+         write (*,'(a,f10.6)') "Epsilon      : ", EPS
+         write (*,'(a,f10.6)') "Time Step    : ", DT
+         write (*,'(a)') "--------------------------"
+         write (*,'(a)') "Indices"
+         write (*,'(a,I1)') "   Symmetry      : ", NSYM
+         write (*,'(a,I1)') "   Ground Effect : ", NGRND
+         write (*,'(a)') "--------------------------"
+         write (*,'(a,3f7.3)') "Center of Gravity  : ", CGX,CGY,CGZ
+         write (*,'(a,3f7.3)') "Wing Surface (m^2) : ", WINGAREA
+         write (*,'(a,3f7.3)') "Mean Aerod. Chord  : ", MAC
+         write (*,'(a)') "--------------------------"
+         write (*,'(a)') " "
+         write (*,'(a)') "STARTING SOLVER"
+
+         write (50,'(a)') "--------------------------"
+         write (50,'(a)') "Printing ROS Configuration"
+         write (50,'(a)') "Angles  (deg)"
+         write (50,'(a)') "Lengths (meters)"
+         write (50,'(a)') "Max Iterations : 100"
+         write (50,'(a)') "--------------------------"
+         write (50,'(a)') "Angles"
+         write (50,'(a,f10.3)') "   Yaw   : ", ALF*180/PI
+         write (50,'(a,f10.3)') "   Pitch : ", BET*180/PI
+         write (50,'(a,f10.3)') "   Roll  : ", GAM*180/PI
+         write (50,'(a)') "--------------------------"
+         write (50,'(a,f10.3)') "Wind Speed   : ", VINIT
+         write (50,'(a,f10.6)') "Epsilon      : ", EPS
+         write (50,'(a,f10.6)') "Time Step    : ", DT
+         write (50,'(a)') "--------------------------"
+         write (50,'(a)') "Indices"
+         write (50,'(a,I1)') "   Symmetry      : ", NSYM
+         write (50,'(a,I1)') "   Ground Effect : ", NGRND
+         write (50,'(a)') "--------------------------"
+         write (50,'(a,3f7.3)') "Center of Gravity  : ", CGX,CGY,CGZ
+         write (50,'(a,3f7.3)') "Wing Surface (m^2) : ", WINGAREA
+         write (50,'(a,3f7.3)') "Mean Aerod. Chord  : ", MAC
+         write (50,'(a)') "--------------------------"
+         write (50,'(a)') " "
+         write (50,'(a)') "STARTING SOLVER"
+
          
+      end subroutine print_run_settings
+
+
+      SUBROUTINE SOLVE(ITER,NPAN)
+      IMPLICIT NONE
+
+      INTEGER, PARAMETER :: PR = 4
+      INTEGER, PARAMETER :: MAX_N = 8000
+      INTEGER, INTENT(IN) :: ITER, NPAN
+      INTEGER :: INFO
+
+
+      REAL(PR) :: A,B, C, A_ORIGINAL, RHS(8000)
+      INTEGER  :: IPIV
+
+
+      COMMON/VG1/A(8000,8000),A_ORIGINAL(8000,8000)
+      COMMON/VG2/B(8000)
+      COMMON/GVV/C(8000),IPIV(8000)
+
+
+      IF (ITER.EQ.0) THEN
+      A_ORIGINAL = A
+      WRITE( *,*) "LU FACTORIZATION"
+      WRITE(50,*) "LU FACTORIZATION"
+
+      CALL SGETRF(NPAN, NPAN, A, MAX_N, IPIV, INFO)
+      IF (INFO.NE.0) THEN
+      WRITE( *,*) "Error in LU factorization"
+      WRITE(50,*) "Error in LU factorization"
+      STOP
+      END IF
+      WRITE( *,*) "LU FACTORIZATION DONE"
+      WRITE(50,*) "LU FACTORIZATION DONE"
+      END IF
+
+      
+      C = B
+
+      CALL SGETRS('N', NPAN, 1, A, MAX_N, IPIV, C, MAX_N, INFO)
+
+      RETURN
+      ! CHECK IF THE SOLUTION IS CORRECT
+      IF (INFO.NE.0) THEN
+      WRITE( *,*) "Error in LU solve"
+      WRITE(50,*) "Error in LU solve"
+      STOP
+      ELSE
+         RHS = MATMUL(A_ORIGINAL, C)
+         WRITE( *,*) "LU solve A*C= B"
+         WRITE( *,*) "RHS :"
+         WRITE(*,'(10F15.5)') RHS(1:10)
+         WRITE( *,*) "B   :"
+         WRITE(*,'(10F15.5)') B(1:10)
+         PRINT *
+
+      END IF
+      END SUBROUTINE SOLVE
+
+            SUBROUTINE READ_SETTINGS(NPAN,NGRID,ALF,BET,GAM,
+     1VINIT,EPS,DT,NSYM,INCH,NGRND,HFL,CGX,CGY,CGZ,WINGAREA,MAC)
+            IMPLICIT NONE
+            INTEGER, INTENT(OUT) :: NPAN, NGRID, NSYM, NGRND, INCH
+            REAL(4), INTENT(OUT) :: ALF, BET, GAM
+            REAL(4), INTENT(OUT) :: VINIT, EPS, DT
+            REAL(4), INTENT(OUT) :: HFL
+            REAL(4), INTENT(OUT) :: CGX, CGY, CGZ
+            REAL(4), INTENT(OUT) :: WINGAREA, MAC
+
+            OPEN(UNIT=9,FILE='DELTA.INP',STATUS='UNKNOWN')
+
+            READ(9,'(I10)') NPAN
+            READ(9,'(I10)') NGRID
+            READ(9,'(F10.3)') ALF
+            READ(9,'(F10.3)') BET
+            READ(9,'(F10.3)') GAM
+            READ(9,'(F10.3)') VINIT
+            READ(9,'(F10.8)') EPS
+            READ(9,'(F10.8)') DT
+            READ(9,'(I10)') NSYM
+            READ(9,'(I10)') INCH
+            READ(9,'(I10)') NGRND
+            READ(9,'(F10.3)') HFL
+            READ(9,'(F10.3)') CGX
+            READ(9,'(F10.3)') CGY
+            READ(9,'(F10.3)') CGZ
+            READ(9,'(F10.3)') WINGAREA
+            READ(9,'(F10.3)') MAC
+
+            CLOSE(9)
+      END SUBROUTINE READ_SETTINGS
+
+      SUBROUTINE GEOM_MODDED(NPAN,NGRID,ALF,BET,GAM,NSYM,NGRND,
+     1HFL,CGX,CGY,CGZ,WINGAREA,MAC)
+      IMPLICIT NONE
+
+      INTEGER NPAN,NGRID,NSYM,NGRND,INCH
+      REAL ALF,BET,GAM,HFL,CGX,CGY,CGZ,WINGAREA,MAC
+      REAL PI
+
+      REAL X(8000),Y(8000),Z(8000)
+      REAL ANX(8000),ANY(8000),ANZ(8000)
+      REAL GX(8000),GY(8000),GZ(8000)
+      REAL DS(8000)
+      INTEGER IC(8000,4),MARK(8000),MARKW(8000)
+      INTEGER IPROP(8000)
+
+
+      INTEGER I,J
+      REAL, DIMENSION(3,3) :: ROT, INVROT
+      REAL, DIMENSION(3)   :: XYZ, NORM_VEC
+      REAL :: sina, cosa, sinb, cosb, sing, cosg
+      
+
+      COMMON/GAVV/X,Y,Z
+      COMMON/GRID/IC,MARK,MARKW
+      COMMON/PPG/IPROP
+      COMMON/AVV1/ANX,ANY,ANZ,GX,GY,GZ
+      COMMON/ANPORT/DS
+      COMMON/GEOM/ROT,INVROT
+
+
+
+      PI = 4.0*ATAN(1.0)
+
+      OPEN(UNIT=7,FILE='DELTA.PAN',STATUS='UNKNOWN')
+      OPEN(UNIT=8,FILE='DELTA.DAT',STATUS='UNKNOWN')
+
+      OPEN(UNIT=30,FILE='WN.PAN',STATUS='UNKNOWN')
+      OPEN(UNIT=40,FILE='WN.DAT',STATUS='UNKNOWN')
+
+C=======================================================================
+      IF (INCH.EQ.1) THEN
+      CGX = CGX * 0.0254
+      CGY = CGY * 0.0254
+      CGZ = CGZ * 0.0254
+      HFL = HFL * 0.0254
+      WINGAREA = WINGAREA * 0.00064516
+      MAC = MAC * 0.0254
+      END IF
+C=======================================================================
+C     LOAD THE ORIGINAL POINT CLOUD DATA
+      DO I=1,NGRID
+C     READ THE POINTS GEOMETRY DATA      
+         READ(8,110) J,X(I),Y(I),Z(I),MARK(I)
+C        CONVERT THE GEOMETRY TO METERS
+         IF(INCH.EQ.1) THEN
+               X(I)=X(I)*0.0254
+               Y(I)=Y(I)*0.0254
+               Z(I)=Z(I)*0.0254
+         END IF
+C        ADD THE HFL TO THE Z COORDINATE
+         Z(I) = Z(I) + HFL
+      END DO
+C     IF CGX,CGY,CGZ ARE ZERO THEN CALCULATE THE GEOMETRIC CENTER
+      IF ((CGX.LT.1E-5).AND.(CGY.LT.1E-5).AND.(CGZ.LT.1E-5)) THEN
+            CGX = (MAXVAL(X) + MINVAL(X)) / 4.
+            CGY = (MAXVAL(Y) + MINVAL(Y)) / 2.
+            CGZ = (MAXVAL(Z) + MINVAL(Z)) / 2.
+            IF (NSYM.EQ.1) THEN
+                  CGY = MINVAL(Y)
+            END IF
+      END IF
+
+      GZ = GZ + HFL
+
+C      PRINT *
+C      PRINT *
+C      PRINT *, "NORMAL VECTOR ARE FLIPPED, FIX IN GEOMETRY.FOR"
+      DO I=1,NPAN
+C     READ THE PANEL DATA
+      READ(7,120) J,IC(I,1),IC(I,2),IC(I,3),IC(I,4),IPROP(I),
+     1ANX(I),ANY(I),ANZ(I),GX(I),GY(I),GZ(I),DS(I)
+     
+      
+      ANX(I) = ANX(I)
+      ANY(I) = ANY(I)
+      ANZ(I) = ANZ(I)
+
+C     WRITE THE FINAL PANEL DATA (DOESN'T CHANGE BUT NEEDED FOR THE POST PROCESS TO WORK)      
+      WRITE(30,130) I,IC(I,1),IC(I,2),IC(I,3),IC(I,4),IPROP(I)
+      END DO
+
+      GZ = GZ + HFL
+
+
+C=======================================================================
+C     CONVERT THE ANGLES TO RADIANS
+      ALF=ALF*PI/180.
+      BET=BET*PI/180.
+      GAM=GAM*PI/180.
+C     CREATE THE ROTATION MATRIX - ROT
+      sina = sin(ALF); cosa = cos(ALF)
+      sinb = sin(BET); cosb = cos(BET)
+      sing = sin(GAM); cosg = cos(GAM)
+
+      ROT(1,1) = cosa*cosb
+      ROT(1,2) = cosa*sinb*sing-sina*cosg
+      ROT(1,3) = cosa*sinb*cosg+sina*sing
+
+      ROT(2,1) = sina*cosb
+      ROT(2,2) = sina*sinb*sing+cosa*cosg
+      ROT(2,3) = sina*sinb*cosg-cosa*sing
+
+      ROT(3,1) = -sinb
+      ROT(3,2) = cosb*sing
+      ROT(3,3) = cosb*cosg
+
+      IF ((ALF.LT.1.0E-5).AND.
+     1    (BET.LT.1.0E-5).AND.
+     2    (GAM.LT.1.0E-5)) THEN
+
+            INVROT = ROT
+            
+      ELSE
+            call matinv3(ROT,INVROT)
+      END IF
+
+c      PRINT *, "ROT"
+c      print *, ROT(1,1), ROT(1,2), ROT(1,3)
+c      print *, ROT(2,1), ROT(2,2), ROT(2,3)
+c      print *, ROT(3,1), ROT(3,2), ROT(3,3)
+
+c      print *, "INVROT"
+c      print *, INVROT(1,1), INVROT(1,2), INVROT(1,3)
+c      print *, INVROT(2,1), INVROT(2,2), INVROT(2,3)
+c      print *, INVROT(3,1), INVROT(3,2), INVROT(3,3)
+C=======================================================================
+C      
+C     ROTATE THE GEOMETRY AROUND THE CG OR THE GEOMETRIC CENTER
+C
+C     1. TRANSLATE THE GEOMETRY TO THE ORIGIN
+C     2. ROTATE THE GEOMETRY
+C     3. TRANSLATE THE GEOMETRY BACK TO THE ORIGINAL POSITION
+
+C       TRANSLATE THE GEOMETRY TO THE ORIGIN
+      X = X - CGX
+      Y = Y - CGY
+      Z = Z - CGZ
+
+      GX = GX - CGX
+      GY = GY - CGY
+      GZ = GZ - CGZ
+C       ROTATE THE GEOMETRY
+      DO I=1,NGRID
+      XYZ = (/X(I),Y(I),Z(I)/)
+      XYZ = MATMUL(ROT, XYZ)
+      X(I) = XYZ(1); Y(I) = XYZ(2); Z(I) = XYZ(3)
+      END DO
+
+      DO I = 1, NPAN
+C     ROTATE THE GEOMETRIC CENTER
+      XYZ = (/GX(I),GY(I),GZ(I)/)
+      XYZ = MATMUL(ROT, XYZ)
+
+      GX(I) = XYZ(1)
+      GY(I) = XYZ(2)
+      GZ(I) = XYZ(3)
+C     ROTATE THE NORMAL VECTORS
+      NORM_VEC = (/ANX(I),ANY(I),ANZ(I)/)
+      
+      NORM_VEC    = MATMUL(ROT, NORM_VEC)
+      
+      ANX(I) = NORM_VEC(1)
+      ANY(I) = NORM_VEC(2)
+      ANZ(I) = NORM_VEC(3)
+      END DO
+C       TRANSLATE THE GEOMETRY BACK TO THE ORIGINAL POSITION
+      X = X + CGX
+      Y = Y + CGY
+      Z = Z + CGZ
+
+      GX = GX + CGX
+      GY = GY + CGY 
+      GZ = GZ + CGZ 
+C=======================================================================
+C     WRITE THE FINAL GEOMETRY DATA
+      DO I=1,NGRID
+      WRITE(40,110) I,X(I),Y(I),Z(I),MARK(I)
+      END DO
+C=======================================================================
+C     CLOSE THE FILES
+      CLOSE(7)
+      CLOSE(8)
+      CLOSE(9)
+      CLOSE(30)
+      CLOSE(40)
+C=======================================================================
+
+
+  110 FORMAT(I10,3F15.5,I10)
+  120 FORMAT(6I10,7F15.5)
+  130 FORMAT(6I10)
+      END SUBROUTINE GEOM_MODDED
+
+
+      SUBROUTINE ANALGEO_MODDED(NPAN)
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/ANPORT/DS(8000)
+      DIMENSION vec_TEMP(3)
+
+      DO I=1,NPAN
+
+            XX = X(IC(I,1)) - GX(I)
+            YY = Y(IC(I,1)) - GY(I)
+            ZZ = Z(IC(I,1)) - GZ(I)
+
+
+            ANORM=NORM2((/XX,YY,ZZ/))
+
+            ALX(I)=XX/ANORM
+            ALY(I)=YY/ANORM
+            ALZ(I)=ZZ/ANORM
+
+            CALL CROSS_PRODUCT((/ANX(I),ANY(I),ANZ(I)/),
+     1                         (/ALX(I),ALY(I),ALZ(I)/),
+     2                         vec_TEMP)
+            ATX(I) = vec_TEMP(1)
+            ATY(I) = vec_TEMP(2)
+            ATZ(I) = vec_TEMP(3)
+
+      END DO
+      END SUBROUTINE ANALGEO_MODDED 
+
+
+      SUBROUTINE CROSS_PRODUCT(a, b, c)
+            REAL*4, DIMENSION(3), INTENT(IN)  :: a, b
+            REAL*4, DIMENSION(3), INTENT(OUT) :: c
+                      
+            c(1) = a(2) * b(3) - a(3) * b(2)
+            c(2) = a(3) * b(1) - a(1) * b(3)
+            c(3) = a(1) * b(2) - a(2) * b(1)
+      END SUBROUTINE CROSS_PRODUCT
+          
+      subroutine matinv3(A,B)
+C     Performs a direct calculation of the inverse of a 3×3 matrix.
+      integer, parameter    :: pr = 4
+      real(pr), intent(in)  :: A(3,3)   !! Matrix
+      real(pr) ,intent(out) :: B(3,3)   !! Inverse matrix
+      real(pr)              :: detinv
+
+      ! Calculate the inverse determinant of the matrix
+      detinv = 1/(A(1,1)*A(2,2)*A(3,3) - A(1,1)*A(2,3)*A(3,2)
+     1          - A(1,2)*A(2,1)*A(3,3) + A(1,2)*A(2,3)*A(3,1)
+     2          + A(1,3)*A(2,1)*A(3,2) - A(1,3)*A(2,2)*A(3,1))
+
+      ! Calculate the inverse of the matrix
+      B(1,1) = +detinv * (A(2,2)*A(3,3) - A(2,3)*A(3,2))
+      B(2,1) = -detinv * (A(2,1)*A(3,3) - A(2,3)*A(3,1))
+      B(3,1) = +detinv * (A(2,1)*A(3,2) - A(2,2)*A(3,1))
+      B(1,2) = -detinv * (A(1,2)*A(3,3) - A(1,3)*A(3,2))
+      B(2,2) = +detinv * (A(1,1)*A(3,3) - A(1,3)*A(3,1))
+      B(3,2) = -detinv * (A(1,1)*A(3,2) - A(1,2)*A(3,1))
+      B(1,3) = +detinv * (A(1,2)*A(2,3) - A(1,3)*A(2,2))
+      B(2,3) = -detinv * (A(1,1)*A(2,3) - A(1,3)*A(2,1))
+      B(3,3) = +detinv * (A(1,1)*A(2,2) - A(1,2)*A(2,1))
+      end subroutine matinv3
+
+
+            SUBROUTINE CPAIP(ITER,NPAN,NPW,NSYM,VINIT,NGRND,CGX,CGY,CGZ,
+     1WINGAREA,MAC,ALIFT,DRAG,SIDE,AMROLL,AMPITCH,AMYAW)
+C GGX,GGY,GGZ: K.B. A/FOYS
+      IMPLICIT REAL*4 (A-H,O-Z)
+      COMMON/VVOR/XG,YG,ZG,X1,Y1,Z1,X2,Y2,Z2,X3,Y3,Z3,X4,Y4,Z4,VVX,
+     1VVY,VVZ
+      COMMON/AVV1/ANX(8000),ANY(8000),ANZ(8000),GX(8000),GY(8000),
+     1GZ(8000)
+      COMMON/AVV2/ATX(8000),ATY(8000),ATZ(8000),ALX(8000),ALY(8000),
+     1ALZ(8000)
+      COMMON/ANPORT/DS(8000)
+      COMMON/VW/CW(100,8000),ICW(8000,2)
+      COMMON/GAVV/X(8000),Y(8000),Z(8000)
+      COMMON/GW/XW(100,8000),YW(100,8000),ZW(100,8000)
+      COMMON/GVV/C(8000)
+      COMMON/GRID/IC(8000,4),MARK(8000),MARKW(8000)
+      COMMON/PPG/IPROP(8000)
+      COMMON/GEOM/ROT(3,3)
+
+      REAL MAC
+      REAL vec_n(3), vec_l(3), vec_m(3), vec_VINIT(3)
+      REAL vec_V_per(3)
+      REAL Q_k_1(3), Q_k_2(3), Q_k(3) 
+      REAL dF(3), F(3), r(3), M(3)
+      REAL DRAG_VECTOR(3), SIDE_VECTOR(3), LIFT_VECTOR(3)
+      REAL CG_GLOBAL(3), FORCES(3)
+
+      RHO=1.225
+      PATM=1.D+5
+      DRAG=0.D0
+      SIDE=0.D0
+      ALIFT=0.D0
+      AMROLL=0.D0
+      AMPITCH=0.D0
+      AMYAW=0.D0
+
+      DRAG_VECTOR = (/1.0, 0.0, 0.0/)  ! Drag vector in the x-direction
+      SIDE_VECTOR = (/0.0, 1.0, 0.0/)  ! Side vector in the y-direction
+      LIFT_VECTOR = (/0.0, 0.0, 1.0/)  ! Lift vector in the z-direction
+
+      DRAG_VECTOR = MATMUL(ROT, DRAG_VECTOR)
+      SIDE_VECTOR = MATMUL(ROT, SIDE_VECTOR)
+      LIFT_VECTOR = MATMUL(ROT, LIFT_VECTOR)
+
+      OPEN(UNIT=60,FILE='CPK.DAT'  ,STATUS='UNKNOWN')
+      OPEN(UNIT=61,FILE='LOADS.DAT'  ,STATUS='UNKNOWN')
+
+      DO I=1,NPAN
+         BIT = SQRT(DS(I))
+         
+         CPX = GX(I) + ANX(I)*BIT
+         CPY = GY(I) + ANY(I)*BIT
+         CPZ = GZ(I) + ANZ(I)*BIT
+
+         CALL VELPAN(NPAN,    NSYM,NGRND,CPX,CPY,CPZ,U1,V1,W1)
+         CALL VELWAK(ITER,NPW,NSYM,NGRND,CPX,CPY,CPZ,U2,V2,W2)
+
+         U = U1 + U2
+         V = V1 + V2
+         W = W1 + W2
+         
+C	SET UP THE VECTORS
+         vec_n = (/ANX(I), ANY(I), ANZ(I)/)
+         vec_l = (/ALX(I), ALY(I), ALZ(I)/)
+         vec_m = (/ATX(I), ATY(I), ATZ(I)/)
+
+C	Vinf Vector
+         vec_VINIT = (/VINIT, 0., 0./)
+C	Calculate first part of Qk
+         Q_k_11 = DOT_PRODUCT(vec_VINIT,vec_l)
+         Q_k_12 = DOT_PRODUCT(vec_VINIT,vec_m)
+         Q_k_13 = DOT_PRODUCT(vec_VINIT,vec_n)
+         Q_k_1 = (/Q_k_11, Q_k_12, Q_k_13/)
+C	Calculate the second part of Qk (Pertubation Velocity Vector)
+         vec_V_per = (/U,V,W/)
+         Q_k_21 = DOT_PRODUCT(vec_V_per,vec_l)
+         Q_k_22 = DOT_PRODUCT(vec_V_per,vec_m)
+         Q_k_23 = DOT_PRODUCT(vec_V_per,vec_n)
+         Q_k_2 = (/Q_k_21, Q_k_22, Q_k_23/)
+C	Calculate Q_k
+         Q_k = Q_k_1 + Q_k_2
+C	Calculate Cpk
+         Cpk = 1 - (NORM2(Q_k)**2)/(NORM2(vec_VINIT)**2)
+C     WRITE CPK TO CPK.DAT
+         WRITE(60,'(I10,4F15.5)') I, GX(I), GY(I), GZ(I), Cpk
+C	Calculate contribution in aerodynamic loads
+         dF = - Cpk * (0.5*RHO*VINIT**2) * DS(I) * vec_n
+
+C         P = (0.5 * RHO * VINIT**2)*Cpk + PATM
+C         dF = -P*DS(I)*vec_n
+
+         WRITE(61,'(I10,6F15.5)') I, GX(I), GY(I), GZ(I), 
+     1                               dF(1), dF(2), dF(3)
+
+         DRAG  = DRAG  + DOT_PRODUCT(dF, DRAG_VECTOR)
+         SIDE  = SIDE  + DOT_PRODUCT(dF, SIDE_VECTOR)
+         ALIFT = ALIFT + DOT_PRODUCT(dF, LIFT_VECTOR)
+
+
+      END DO
+
+      IF (NSYM .EQ. 1) THEN
+         DRAG  = 2.0 * DRAG
+         SIDE  = 0.0 * SIDE
+         ALIFT = 2.0 * ALIFT
+      END IF
+
+      CG_GLOBAL = (/CGX, CGY, CGZ/)
+      FORCES    = (/DRAG, SIDE, ALIFT/)
+      
+      CALL cross_product(CG_GLOBAL, FORCES, M)
+
+      AMROLL   = M(1)
+      AMPITCH  = M(2)
+      AMYAW    = M(3)
+
+      CLOSE(60)
+      CLOSE(61)
+
+      RETURN
+      END SUBROUTINE CPAIP
+
+      SUBROUTINE CDTDRAG(NSYM, VINIT, WINGAREA, MAC, CDT)
+      IMPLICIT NONE
+
+      ! Input and output variable declarations
+      INTEGER, INTENT(IN) :: NSYM       ! Symmetry flag (1 for symmetric, otherwise 0)
+      REAL(4), INTENT(IN) :: VINIT      ! Initial velocity
+      REAL(4), INTENT(IN) :: WINGAREA   ! Wing area
+      REAL(4), INTENT(IN) :: MAC        ! Mean aerodynamic chord
+      REAL(4), INTENT(OUT) :: CDT       ! Calculated drag coefficient
+
+      ! Local variables
+      REAL(4) :: RE, CT, VISQ, DSURF, AL  ! RE: Reynolds number, CT: Drag coefficient, VISQ: Kinematic viscosity, DSURF: Surface area, AL: Characteristic length
+      REAL(4), DIMENSION(8000) :: DS, X, Y, Z  ! Arrays for surface data and coordinates
+
+      ! Common blocks to share data with other parts of the program
+      COMMON/GAVV/X, Y, Z  ! Coordinates of the surface
+      COMMON/ANPORT/DS     ! Surface area elements
+
+      ! Kinematic viscosity of air (approximate value for standard conditions)
+      VISQ = 1.46E-5
+
+      ! Calculate total surface area (DSURF) by summing all surface elements (DS)
+      DSURF = SUM(DS)
+
+      ! Calculate Reynolds number (RE) based on velocity, characteristic length, and viscosity
+      RE = VINIT * MAC / VISQ
+
+
+      ! Calculate drag coefficient (CT) based on Reynolds number
+      ! For laminar flow (RE <= 500,000), use Blasius solution
+      CT = 1.3280 / SQRT(RE)
+      ! For turbulent flow (RE > 500,000), use empirical correlation
+      IF (RE .GT. 5.D+5) THEN
+            CT = 0.074 / RE**0.2
+      END IF
+
+      ! Calculate total drag coefficient (CDT) by scaling CT with surface area and wing area
+      CDT = CT * DSURF / WINGAREA
+
+      ! If symmetry is applied (NSYM = 1), double the drag coefficient
+      IF (NSYM .EQ. 1) THEN
+            CDT = 2.0 * CDT
+      END IF
+
+      END SUBROUTINE CDTDRAG

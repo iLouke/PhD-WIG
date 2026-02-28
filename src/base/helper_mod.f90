@@ -25,7 +25,7 @@ contains
       str = adjustl(str) ! Remove leading spaces
    end function real_to_char
 
-   !> Converts a integer number to a string
+   !> Converts an integer number to a string
    !> Usage: trim(int_to_char(my_val))
    function int_to_char(val, fmt) result(str)
       integer(ip), intent(in) :: val

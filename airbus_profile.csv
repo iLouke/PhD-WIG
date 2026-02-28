@@ -1,0 +1,6 @@
+# Lead Vehicle Trajectory
+# Cruising at 30 m/s at a 2.0m WIG altitude, 5 degrees nose up
+Time, U, V, W, Roll, Pitch, Yaw, X, Y, Z
+0.0, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0, 2.0
+0.5, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, 15.0, 0.0, 2.0
+1.0, 30.0, 0.0, 0.0, 0.0, 5.0, 0.0, 30.0, 0.0, 2.0

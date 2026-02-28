@@ -1,7 +1,8 @@
 module rigid_body_mod
    use base_kinds_mod, only: wp, ip
    use constants_mod, only: G_ACCEL
-   use math_utils_mod, only: cross_product, inv
+   use vector_ops_mod, only: cross_product
+   use lapack_linalg_mod, only: inv
    implicit none
    private
 

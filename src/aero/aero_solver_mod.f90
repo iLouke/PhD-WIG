@@ -22,7 +22,7 @@ module aero_solver_mod
    !!
    !! An SVD fallback (DGELSD) is provided for ill-conditioned systems.
    use base_kinds_mod, only: wp, ip
-   use math_utils_mod, only: factorize_matrix, solve_pre_factorized, solve_svd_least_squares
+   use lapack_linalg_mod, only: factorize_matrix, solve_pre_factorized, solve_svd_least_squares
    implicit none
    private
 
@@ -31,7 +31,7 @@ module aero_solver_mod
    ! ─── Type Definition ─────────────────────────────────────────────────
    type :: aero_linsys_t
       private
-      integer(ip) :: n = 0                          !! System size
+      integer(ip) :: n = 0                           !! System size
       real(wp), allocatable :: A_lu(:, :)            !! LU-factorized AIC matrix
       integer, allocatable  :: ipiv(:)               !! Pivot indices from DGETRF
       logical :: factorized = .false.                !! Has the matrix been factorized?

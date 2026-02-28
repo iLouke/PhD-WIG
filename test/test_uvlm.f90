@@ -1,4 +1,4 @@
-module test_uvlm_fundamentals
+module test_uvlm
    !! UVLM Test Suite - Fundamental Operations
    !!
    !! Contains comprehensive tests for:
@@ -652,4 +652,4 @@ contains
       call global_logger%msg(LOG_INFO, "  [DONE] UVLM mesh file test complete")
    end subroutine run_uvlm_from_mesh_files
 
-end module test_uvlm_fundamentals
+end module test_uvlm

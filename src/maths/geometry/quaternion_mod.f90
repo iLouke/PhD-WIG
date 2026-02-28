@@ -20,6 +20,7 @@ module quaternion_mod
    !! Rotation: v' = q * v * q^(-1)  (active rotation of vector v)
    use base_kinds_mod, only: wp
    use vector3d_mod, only: vector3d_t, vec3, norm
+   use euler_rotations_mod, only: build_rotation_matrix_aero, extract_euler_aero_from_matrix
    implicit none
    private
 
@@ -101,29 +102,9 @@ contains
    pure function from_euler_aero(alpha, beta, gamma) result(q)
       real(wp), intent(in) :: alpha, beta, gamma
       type(quaternion_t) :: q
-      type(quaternion_t) :: q_alpha, q_beta, q_gamma
       real(wp) :: R(3, 3)
-      real(wp) :: ca, sa, cb, sb, cg, sg
-      real(wp) :: tr, s_val
 
-      ! Precompute trig
-      ca = cos(alpha); sa = sin(alpha)
-      cb = cos(beta); sb = sin(beta)
-      cg = cos(gamma); sg = sin(gamma)
-
-      ! Build the exact legacy rotation matrix
-      ! Row 1
-      R(1, 1) = ca*cb
-      R(1, 2) = sb
-      R(1, 3) = sa*cb
-      ! Row 2
-      R(2, 1) = -(ca*sb*cg - sa*sg)
-      R(2, 2) = cb*cg
-      R(2, 3) = -(sa*sb*cg - ca*sg)
-      ! Row 3
-      R(3, 1) = ca*sb*sg - sa*cg
-      R(3, 2) = -cb*sg
-      R(3, 3) = sa*sb*sg + ca*cg
+      R = build_rotation_matrix_aero(alpha, beta, gamma)
 
       ! Convert rotation matrix to quaternion using Shepperd's method
       ! (numerically stable for all orientations)
@@ -322,22 +303,7 @@ contains
 
       R = this%to_rotation_matrix()
 
-      ! From the legacy matrix:
-      !   R(1,2) = sin(beta)
-      !   R(1,1) = cos(alpha)*cos(beta)
-      !   R(1,3) = sin(alpha)*cos(beta)
-      !   R(2,2) = cos(beta)*cos(gamma)
-      !   R(3,2) = -cos(beta)*sin(gamma)
-      beta = asin(max(-1.0_wp, min(1.0_wp, R(1, 2))))
-
-      if (abs(cos(beta)) > 1.0e-10_wp) then
-         alpha = atan2(R(1, 3), R(1, 1))
-         gamma = atan2(-R(3, 2), R(2, 2))
-      else
-         ! Gimbal lock: beta ~ +/- 90°, set gamma = 0
-         alpha = atan2(-R(3, 1), R(3, 3))
-         gamma = 0.0_wp
-      end if
+      call extract_euler_aero_from_matrix(R, alpha, beta, gamma)
    end subroutine quat_to_euler
 
    ! ═══════════════════════════════════════════════════════════════════════
