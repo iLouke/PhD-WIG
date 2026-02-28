@@ -37,14 +37,12 @@ contains
    subroutine plotter_figure(this)
       class(plotter_t), intent(inout) :: this
 
-      ! Assign unique instance ID
       global_plotter_id = global_plotter_id + 1
       this%instance_id = global_plotter_id
 
       ! Ensure directory exists for python script outputs
       call execute_command_line("mkdir -p output")
 
-      ! Reset state for a new figure
       this%series_count = 0
       this%is_initialized = .false.
       this%title_str = ""
@@ -95,7 +93,6 @@ contains
 
       this%series_count = this%series_count + 1
 
-      ! Pass the style directly as matplotlib's linestyle
       call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style))
    end subroutine plotter_add_series
 
@@ -111,13 +108,16 @@ contains
          return
       end if
 
-      ! Generate a unique python script name based on the instance ID
       write (id_str, '(I0)') this%instance_id
       py_filename = "output/plot_"//trim(id_str)//".py"
 
-      ! savefig automatically executes the Python script under the hood
-      call this%plt%savefig(trim(filename), pyfile=trim(py_filename))
-      call global_logger%msg(LOG_INFO, "[PLOTTER] Plot saved to: "//trim(filename))
+      if (check_matplotlib()) then
+         ! Matplotlib is available, proceed with saving and auto-execution
+         call this%plt%savefig(trim(filename), pyfile=trim(py_filename))
+         call global_logger%msg(LOG_INFO, "[PLOTTER] Plot saved to: "//trim(filename))
+      else
+         call global_logger%msg(LOG_WARN, "[PLOTTER] Skipping plot rendering due to missing Matplotlib.")
+      end if
    end subroutine plotter_save
 
    function check_matplotlib() result(is_available)
@@ -134,20 +134,19 @@ contains
 
          if (exit_code == 0) then
             available = .true.
-            call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib verified successfully.")
+            call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python3) verified successfully.")
          else
-            ! Second attempt: try 'python' (common on Windows or virtual environments)
+            ! Second attempt: try 'python'
             call execute_command_line( &
                'python -c "import matplotlib.pyplot" > /dev/null 2>&1', &
                exitstat=exit_code)
 
             if (exit_code == 0) then
                available = .true.
-               call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib verified successfully.")
+               call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python) verified successfully.")
             else
                available = .false.
                call global_logger%msg(LOG_WARN, "[PLOTTER] WARNING: Python or matplotlib not found.")
-               call global_logger%msg(LOG_WARN, "[PLOTTER] Generated .py scripts will not execute automatically.")
             end if
          end if
          checked = .true.
