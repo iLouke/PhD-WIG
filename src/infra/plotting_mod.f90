@@ -18,7 +18,12 @@ module plotting_mod
       character(len=4096) :: plot_cmd = ""
       character(len=4096) :: settings = ""
       integer :: series_count = 0
+      ! 3D-specific fields
+      logical :: is_3d = .false.
+      character(len=8192) :: splot_cmd = ""
+      integer :: splot_count = 0
    contains
+      ! 2D plotting
       procedure :: figure => plotter_figure
       procedure :: title => plotter_title
       procedure :: xlabel => plotter_xlabel
@@ -29,6 +34,13 @@ module plotting_mod
       procedure :: add => plotter_add_series
       procedure :: render => plotter_render
       procedure :: save => plotter_save
+      ! 3D plotting
+      procedure :: figure_3d => plotter_figure_3d
+      procedure :: zlabel => plotter_zlabel
+      procedure :: view => plotter_view
+      procedure :: add_panels_3d => plotter_add_panels_3d
+      procedure :: render_3d => plotter_render_3d
+      procedure :: save_3d => plotter_save_3d
    end type plotter_t
 
 contains
@@ -227,5 +239,222 @@ contains
          call global_logger%msg(LOG_INFO, "[PLOTTER] Install gnuplot to enable plot rendering")
       end if
    end subroutine check_gnuplot_available
+
+   ! ═══════════════════════════════════════════════════════════════════════
+   !                     3D PLOTTING SUBROUTINES
+   ! ═══════════════════════════════════════════════════════════════════════
+
+   !> Initialize a 3D figure (sets up gnuplot for splot)
+   !!
+   !! Sets terminal to a large window with 3D-appropriate defaults:
+   !! equal-axis scaling, default view angle, colorbar palette.
+   subroutine plotter_figure_3d(this)
+      class(plotter_t), intent(inout) :: this
+      character(len=10) :: id_str
+
+      if (.not. gnuplot_checked) then
+         call check_gnuplot_available()
+      end if
+
+      global_plotter_id = global_plotter_id + 1
+      this%instance_id = global_plotter_id
+
+      call execute_command_line("mkdir -p output")
+
+      write (id_str, '(I0)') this%instance_id
+      this%script_file = "output/plot_script_"//trim(id_str)//".gp"
+
+      open (newunit=this%script_unit, file=this%script_file, status='replace')
+
+      ! 3D terminal and defaults
+      write (this%script_unit, '(A)') "set term qt size 1200,800 font 'Arial,11'"
+      write (this%script_unit, '(A)') "set key top right box opaque"
+      write (this%script_unit, '(A)') "set ticslevel 0"
+      write (this%script_unit, '(A)') "set view 60, 330, 1.0"
+      write (this%script_unit, '(A)') &
+         "set palette defined (-1 'dark-blue', -0.5 'blue', 0 'white', 0.5 'red', 1 'dark-red')"
+
+      ! Reset all state
+      this%plot_cmd = ""
+      this%splot_cmd = ""
+      this%settings = ""
+      this%series_count = 0
+      this%splot_count = 0
+      this%is_3d = .true.
+   end subroutine plotter_figure_3d
+
+   !> Set the Z-axis label (3D plots only)
+   subroutine plotter_zlabel(this, text)
+      class(plotter_t), intent(inout) :: this
+      character(len=*), intent(in)    :: text
+      write (this%script_unit, '(A,A,A)') "set zlabel '", trim(text), "'"
+      this%settings = trim(this%settings)//"set zlabel '"//trim(text)//"'"//new_line('a')
+   end subroutine plotter_zlabel
+
+   !> Set the 3D view angle
+   !!
+   !! @param rot_x  Rotation about X-axis (elevation) [degrees]
+   !! @param rot_z  Rotation about Z-axis (azimuth) [degrees]
+   subroutine plotter_view(this, rot_x, rot_z)
+      class(plotter_t), intent(inout) :: this
+      real(wp), intent(in) :: rot_x, rot_z
+      character(len=256) :: view_str
+
+      write (this%script_unit, '(A,F8.2,A,F8.2,A)') &
+         "set view ", rot_x, ", ", rot_z, ", 1.0"
+      write (view_str, '(A,F8.2,A,F8.2,A)') &
+         "set view ", rot_x, ", ", rot_z, ", 1.0"
+      this%settings = trim(this%settings)//trim(view_str)//new_line('a')
+   end subroutine plotter_view
+
+   !> Add a set of wireframe panels to the 3D plot
+   !!
+   !! Each panel is defined by its four corner coordinates. The plotter
+   !! writes each panel as a closed quadrilateral to a data file and
+   !! builds the corresponding gnuplot splot command.
+   !!
+   !! @param px      X-coordinates of panel corners (4, n_panels)
+   !! @param py      Y-coordinates of panel corners (4, n_panels)
+   !! @param pz      Z-coordinates of panel corners (4, n_panels)
+   !! @param label   Legend label for this dataset
+   !! @param color   Line color string (e.g. "blue", "#FF0000"). Ignored when scalar is present.
+   !! @param scalar  Optional per-panel scalar value for palette coloring (n_panels)
+   subroutine plotter_add_panels_3d(this, px, py, pz, label, color, scalar)
+      class(plotter_t), intent(inout) :: this
+      real(wp), intent(in)            :: px(:, :), py(:, :), pz(:, :) ! (4, n_panels)
+      character(len=*), intent(in)    :: label
+      character(len=*), intent(in), optional :: color
+      real(wp), intent(in), optional  :: scalar(:)  ! (n_panels)
+
+      integer :: d_unit, i, j, np
+      character(len=256) :: filename
+      character(len=10)  :: id_str, num_str
+      character(len=32)  :: col_str
+      logical :: has_scalar
+
+      has_scalar = present(scalar)
+      np = size(px, 2)
+      if (np < 1) return
+
+      this%splot_count = this%splot_count + 1
+      write (id_str, '(I0)') this%instance_id
+      write (num_str, '(I0)') this%splot_count
+
+      filename = "output/data_3d_"//trim(id_str)//"_"//trim(num_str)//".dat"
+
+      open (newunit=d_unit, file=filename, status='replace')
+      write (d_unit, '(A,I0,A)') "# ", np, " panels"
+
+      do j = 1, np
+         ! Write 4 corners + first corner again (close the quad)
+         do i = 1, 4
+            if (has_scalar) then
+               write (d_unit, '(4(ES16.8,1X))') px(i, j), py(i, j), pz(i, j), scalar(j)
+            else
+               write (d_unit, '(3(ES16.8,1X))') px(i, j), py(i, j), pz(i, j)
+            end if
+         end do
+         ! Close the loop
+         if (has_scalar) then
+            write (d_unit, '(4(ES16.8,1X))') px(1, j), py(1, j), pz(1, j), scalar(j)
+         else
+            write (d_unit, '(3(ES16.8,1X))') px(1, j), py(1, j), pz(1, j)
+         end if
+         write (d_unit, *)  ! Blank line separates panels
+      end do
+      close (d_unit)
+
+      ! Build splot command fragment
+      col_str = "blue"
+      if (present(color)) col_str = trim(color)
+
+      if (this%splot_count > 1) then
+         this%splot_cmd = trim(this%splot_cmd)//", "
+      end if
+
+      if (has_scalar) then
+         this%splot_cmd = trim(this%splot_cmd)//" '"//trim(filename)//"' "// &
+                          "using 1:2:3:4 with lines palette lw 1.0 title '"//trim(label)//"'"
+      else
+         this%splot_cmd = trim(this%splot_cmd)//" '"//trim(filename)//"' "// &
+                          "with lines lc rgb '"//trim(col_str)//"' lw 1.5 title '"//trim(label)//"'"
+      end if
+
+   end subroutine plotter_add_panels_3d
+
+   !> Render the 3D plot interactively (opens a gnuplot window)
+   subroutine plotter_render_3d(this)
+      class(plotter_t), intent(inout) :: this
+
+      if (this%splot_count > 0) then
+         write (this%script_unit, '(A,A)') "splot ", trim(this%splot_cmd)
+      end if
+
+      close (this%script_unit)
+
+      if (.not. gnuplot_available) then
+         call global_logger%msg(LOG_WARN, "[PLOTTER] Gnuplot not available - skipping 3D render")
+         call global_logger%msg(LOG_INFO, "[PLOTTER] Script saved to: "//trim(this%script_file))
+         return
+      end if
+
+      call execute_command_line("gnuplot -persist "//trim(this%script_file))
+      call global_logger%msg(LOG_INFO, "[PLOTTER] 3D plot rendered: "//trim(this%script_file))
+   end subroutine plotter_render_3d
+
+   !> Save the 3D plot to a PNG file (no interactive window)
+   !!
+   !! Creates a separate gnuplot script with the PNG terminal, writes all
+   !! accumulated settings and the splot command, then executes gnuplot.
+   !! This can be called after or instead of render_3d.
+   subroutine plotter_save_3d(this, filename)
+      class(plotter_t), intent(inout) :: this
+      character(len=*), intent(in)    :: filename
+
+      integer :: png_unit
+      character(len=256) :: png_script
+      character(len=10) :: id_str
+      logical :: is_open
+
+      ! Close the main script unit if still open
+      inquire (unit=this%script_unit, opened=is_open)
+      if (is_open) close (this%script_unit)
+
+      if (.not. gnuplot_available) then
+         call global_logger%msg(LOG_ERROR, "[PLOTTER] Cannot save 3D PNG - gnuplot not available")
+         return
+      end if
+
+      if (this%splot_count == 0) then
+         call global_logger%msg(LOG_WARN, "[PLOTTER] No 3D data to save")
+         return
+      end if
+
+      write (id_str, '(I0)') this%instance_id
+      png_script = "output/plot_png_"//trim(id_str)//".gp"
+
+      open (newunit=png_unit, file=png_script, status='replace')
+
+      ! PNG terminal
+      write (png_unit, '(A)') "set term pngcairo size 1400,900 font 'Arial,11'"
+      write (png_unit, '(A,A,A)') "set output '", trim(filename), "'"
+      write (png_unit, '(A)') "set key top right box opaque"
+      write (png_unit, '(A)') "set ticslevel 0"
+      write (png_unit, '(A)') &
+         "set palette defined (-1 'dark-blue', -0.5 'blue', 0 'white', 0.5 'red', 1 'dark-red')"
+
+      ! Write all accumulated settings (title, labels, view, grid, etc.)
+      if (len_trim(this%settings) > 0) then
+         write (png_unit, '(A)') trim(this%settings)
+      end if
+
+      ! Write splot command
+      write (png_unit, '(A,A)') "splot ", trim(this%splot_cmd)
+
+      close (png_unit)
+
+      call execute_command_line("gnuplot "//trim(png_script))
+      call global_logger%msg(LOG_INFO, "[PLOTTER] 3D plot saved to: "//trim(filename))
+   end subroutine plotter_save_3d
 
 end module plotting_mod
