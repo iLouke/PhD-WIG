@@ -1,176 +1,134 @@
-# Plotter Module Documentation (`plotting_mod`)
+# Plotting Module Documentation (`plotting_mod`)
 
 ## Overview
 
-The `plotting_mod` is a robust, Object-Oriented wrapper for **Gnuplot**. It enables Fortran applications to generate 2D plots programmatically.
+The `plotting_mod` module provides plotting for Fortran via two mechanisms:
 
-Unlike simple wrappers, this module is designed for **production environments**:
+1. **2D plots (`plotter_t`)** — A stateful wrapper around [`pyplot-fortran`](https://github.com/jacobwilliams/pyplot-fortran). It lazily initializes the underlying `pyplot` object, allowing you to cleanly set properties (titles, labels) before adding data series and exporting the script.
+2. **3D panel wireframes (`panel_plot_3d_t`)** — For rendering unstructured quad-panel meshes (aerodynamic surfaces, wakes) via custom matplotlib script generation (`Line3DCollection` / `Poly3DCollection`).
 
-* **Auto-Detection:** Automatically checks if Gnuplot is installed.
-* **Graceful Degradation:** If Gnuplot is missing, it skips rendering but still saves numeric data for later analysis.
-* **Multi-Instance Safe:** Supports creating multiple plot objects simultaneously without file collisions (using unique instance IDs).
-* **Dual Output:** Can render to an interactive window (`qt`) or save directly to an image file (`.png`).
-
-## Prerequisites
-
-To view plots interactively or generate PNGs, **Gnuplot** must be installed on your system.
-
-### Installation
-
-* **Ubuntu/Debian:** `sudo apt-get install gnuplot`
-* **Fedora/RPM:** `sudo dnf install gnuplot`
-* **macOS:** `brew install gnuplot`
-* **Windows:** Install Gnuplot and ensure `gnuplot.exe` is in your system PATH.
-
-> **Note:** If Gnuplot is not found, the module will print a warning and strictly operate in "Data Logging" mode, saving `.dat` files without attempting to render graphics.
+A `check_matplotlib()` utility function is provided for runtime availability checking.
 
 ---
 
-## Usage Workflow
+## Prerequisites
 
-The standard workflow involves four steps: **Initialize**, **Configure**, **Add Data**, and **Output**.
+Python 3 with **matplotlib** must be installed and accessible in your system's PATH:
 
-### 1. Basic Example
+```bash
+pip install matplotlib
+```
+
+---
+
+## 2D Plotting (`plotter_t` wrapper)
+
+Use the `plotter_t` derived type to generate 2D plots. This wrapper manages the underlying `pyplot-fortran` instance and handles Python script generation automatically.
 
 ```fortran
-program demo_plot
+program demo_2d
    use base_kinds_mod, only: wp
-   use plotting_mod
+   use plotting_mod, only: plotter_t, check_matplotlib
    implicit none
 
    type(plotter_t) :: plt
    real(wp) :: x(100), y(100)
    integer :: i
 
-   ! 1. Generate Data
+   ! Generate sample data
    do i = 1, 100
       x(i) = real(i, wp) * 0.1_wp
       y(i) = sin(x(i))
    end do
 
-   ! 2. Initialize
+   ! Initialize a new figure instance
    call plt%figure()
 
-   ! 3. Configure
-   call plt%title("System Response")
-   call plt%xlabel("Time (s)")
-   call plt%ylabel("Amplitude")
+   ! Configure plot properties (cached until data is added)
    call plt%grid(.true.)
+   call plt%xlabel('Time (s)')
+   call plt%ylabel('Amplitude')
+   call plt%title('System Response')
 
-   ! 4. Add Data
-   call plt%add(x, y, "Sine Wave", "lines lc rgb 'blue' lw 2")
+   ! Add data series (Matplotlib standard linestyles apply)
+   call plt%add(x, y, label='Sine Wave', style='-')
 
-   ! 5. Output
-   ! Option A: Show interactive window (requires GUI/X11)
-   call plt%render()
-   
-   ! Option B: Save to file (works on headless servers)
-   call plt%save("output/response_curve.png")
+   ! Save to file (automatically executes the underlying Python script)
+   call plt%save('output/response.png')
 
-end program demo_plot
+end program demo_2d
 
 ```
 
----
-
-## API Reference
-
-### Type `plotter_t`
-
-The main opaque type handling the plotting session.
-
-### Core Methods
-
-#### `figure()`
-
-**Signature:** `subroutine figure(this)`
-**Description:**
-
-* Initializes the plotting session.
-* Assigns a **unique instance ID** (e.g., `1`, `2`, `3`) to avoid file conflicts if multiple plots are used.
-* Checks for Gnuplot availability (only on the first call).
-* Creates the `output/` directory if it doesn't exist.
-
-#### `render()`
-
-**Signature:** `subroutine render(this)`
-**Description:**
-
-* Generates the Gnuplot script (`output/plot_script_N.gp`).
-* Executes Gnuplot to open an interactive **QT window**.
-* *Behavior if Gnuplot missing:* Prints a warning and returns immediately.
-
-#### `save(filename)`
-
-**Signature:** `subroutine save(this, filename)`
-**Description:**
-
-* Exports the current plot configuration to a **PNG image**.
-* Uses the `pngcairo` terminal for high-quality antialiased output.
-* **Arguments:**
-* `filename` (character): The path to save the image (e.g., `"output/results.png"`).
-
-### Configuration Methods
-
-All configuration methods store their settings internally so they can be applied to both `render()` (screen) and `save()` (file).
+### Key `plotter_t` methods
 
 | Method | Arguments | Description |
 | --- | --- | --- |
-| **`title`** | `(text)` | Sets the chart main title. |
-| **`xlabel`** | `(text)` | Sets the X-axis label. |
-| **`ylabel`** | `(text)` | Sets the Y-axis label. |
-| **`grid`** | `(logical)` | `.true.` enables the background grid. |
-| **`xrange`** | `(min, max)` | Manually fixes the X-axis view window. |
-| **`yrange`** | `(min, max)` | Manually fixes the Y-axis view window. |
+| `figure` | `()` | Reset state and initialize a new plotting instance. |
+| `title` | `(text)` | Set the plot title. |
+| `xlabel` | `(text)` | Set the X-axis label. |
+| `ylabel` | `(text)` | Set the Y-axis label. |
+| `grid` | `(enable)` | Enable (`.true.`) or disable (`.false.`) the background grid. |
+| `add` | `(x, y, label, style)` | Add a 2D data series. Uses Matplotlib styles (e.g., `"-"`, `"--"`, `"o"`). |
+| `save` | `(filename)` | Save to an image file and execute the generated Python script. |
 
-### Data Methods
+---
 
-#### `add(x, y, label, style)`
+## 3D Panel Wireframes (`panel_plot_3d_t`)
 
-**Signature:** `subroutine add(this, x, y, label, style)`
-**Description:** Adds a data series to the plot.
+For rendering unstructured quad panels (4 corners × N panels) — e.g., aerodynamic meshes and wakes — use `panel_plot_3d_t`. This generates custom Python/matplotlib scripts since `pyplot-fortran`'s 3D methods require structured grids.
 
-* **`x`, `y**`: `real(wp)` arrays of equal size.
-* **`label`**: Legend text for this series.
-* **`style`**: Raw Gnuplot style string.
-* *Examples:* `"lines"`, `"points"`, `"linespoints"`, `"lines dt 2"` (dashed).
+```fortran
+use plotting_mod, only: panel_plot_3d_t
+type(panel_plot_3d_t) :: p3d
+real(wp) :: mesh_px(4, n_panels), mesh_py(4, n_panels), mesh_pz(4, n_panels)
+
+call p3d%set_title("Wing Mesh + Wake")
+call p3d%set_labels(xlabel="X [m]", ylabel="Y [m]", zlabel="Z [m]")
+call p3d%set_view(55.0_wp, 315.0_wp)
+
+call p3d%add_panels(mesh_px, mesh_py, mesh_pz, "Wing", color="blue")
+call p3d%add_panels(wake_px, wake_py, wake_pz, "Wake", color="#CC3333")
+
+call p3d%save("output/mesh.png")
+! call p3d%show()  ! interactive window
+call p3d%reset()
+
+```
+
+### `panel_plot_3d_t` methods
+
+| Method | Arguments | Description |
+| --- | --- | --- |
+| `set_title` | `(text)` | Set the plot title |
+| `set_labels` | `(xlabel, ylabel, zlabel)` | Set axis labels (all optional) |
+| `set_view` | `(elev, azim)` | Set 3D viewing angle (degrees) |
+| `set_grid` | `(logical)` | Enable/disable grid |
+| `add_panels` | `(px, py, pz, label, color, scalar)` | Add quad panels `(4, n_panels)`. Optional `scalar` for colormap. |
+| `save` | `(filename)` | Save to PNG |
+| `show` | `()` | Open interactive matplotlib window |
+| `reset` | `()` | Free data and reset state |
+
+---
+
+## Utility
+
+### `check_matplotlib()`
+
+```fortran
+logical :: ok
+ok = check_matplotlib()
+
+```
+
+Returns `.true.` if Python + matplotlib are usable. Results are cached after the first call to prevent redundant system checks.
 
 ---
 
 ## Output Files
 
-The module generates organized files in the `output/` directory to keep your project root clean.
-
-| File Name | Description |
+| File Pattern | Description |
 | --- | --- |
-| `data_plotN_M.dat` | Raw ASCII data. `N` is the plotter Instance ID, `M` is the Series ID. |
-| `plot_script_N.gp` | The Gnuplot script used for the interactive window (`render`). |
-| `plot_png_N.gp` | Temporary script generated during PNG export (`save`). |
-
-**Example of Multi-Instance Output:**
-If you create two `plotter_t` objects in your code, you will see:
-
-```text
-output/
-├── data_plot1_1.dat   <-- Plot 1, Series 1
-├── data_plot2_1.dat   <-- Plot 2, Series 1
-├── plot_script_1.gp   <-- Script for Plot 1
-└── plot_script_2.gp   <-- Script for Plot 2
-
-```
-
----
-
-## Troubleshooting
-
-### "Gnuplot not found - plots will be skipped"
-
-This message means `command -v gnuplot` failed.
-
-* **Fix:** Install Gnuplot.
-* **Impact:** Your simulation will still run, and `.dat` files will still be created in `output/`. You can plot them manually later.
-
-### No window appears when calling `render()`
-
-* **Cause:** You might be running on a headless server (SSH) or WSL without a window manager.
-* **Fix:** Use `call plt%save("my_plot.png")` instead. This generates an image file without needing a display server.
+| `output/plot_*.py` | Generated Python scripts for 2D plots |
+| `output/panel3d_*.py` | Generated Python scripts for 3D wireframe rendering |
+| `output/panel3d_data_*.dat` | Panel vertex data for 3D wireframe rendering |

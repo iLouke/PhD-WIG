@@ -12,6 +12,7 @@ auto-examples = true
 link = ["flexiblas"]
 
 [dependencies]
-stdlib = "*"					           # Standard Modern Fortran Library
-#openmp = "*"						   # Multithread Capability
-toml-f.git = "https://github.com/toml-f/toml-f" # Reading simulation config files
+stdlib          = "*"					                                            # Standard Modern Fortran Library
+#openmp        = "*"						                                         # Multithread Capability
+toml-f.git      = "https://github.com/toml-f/toml-f"                                # Reading simulation config files
+pyplot-fortran  = { git="https://github.com/jacobwilliams/pyplot-fortran.git" }

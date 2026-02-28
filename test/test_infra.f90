@@ -82,7 +82,7 @@ contains
    ! --- 3. Plotter Test ---
    subroutine test_plotter_module()
       type(plotter_t) :: plt
-      real(wp) :: x(10), y(10)
+      real(wp) :: x(50), y(50)
       logical :: file_exists
       integer :: i
       character(len=*), parameter :: plot_file = "output/test_plot.png"
@@ -90,30 +90,32 @@ contains
       print *, "Testing Plotter..."
 
       ! A. Setup Dummy Data
-      do i = 1, 10
+      do i = 1, 50
          x(i) = real(i, wp)
-         y(i) = x(i)**2
+         y(i) = sin(x(i))
       end do
 
       ! B. Configure Plot
       call plt%figure()
       call plt%title("Unit Test Plot")
-      call plt%add(x, y, "Test Data", "lines")
 
-      ! C. Save to PNG (Headless-safe)
+      ! Note: Changed "lines" to Matplotlib's standard "-" format
+      call plt%add(x, y, "Test Data", "-")
+
+      ! C. Save to PNG (Headless-safe, will invoke Python under the hood)
       call plt%save(plot_file)
 
       ! D. Verify File Creation
-      ! Note: This requires Gnuplot to be installed.
-      ! If Gnuplot is missing, the file won't exist, but the module handles it gracefully.
+      ! Note: This requires Python and Matplotlib to be installed in the environment.
+      ! If they are missing, the Python script execution fails silently in the background.
       inquire (file=plot_file, exist=file_exists)
 
-      ! Only assert failure if we expected gnuplot to work.
+      ! Only assert failure if we expected Python/Matplotlib to work.
       ! For now, we warn if missing.
       if (file_exists) then
          call assert(.true., "Plot file created successfully")
       else
-         print *, "   [WARN] Plot file not created (Is Gnuplot installed?)"
+         print *, "   [WARN] Plot file not created (Are Python and Matplotlib installed?)"
       end if
 
    end subroutine test_plotter_module
