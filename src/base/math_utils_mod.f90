@@ -83,7 +83,7 @@ contains
       deallocate (ipiv)
    end subroutine solve_linear_system
 
-   !> STEP 1: FACTORIZE (A = L * U)
+   !> FACTORIZE (A = L * U)
    !> Call this once when the geometry/AIC matrix is generated.
    !> Note: ipiv should be stored in Body or Solver object
    !> ipiv is essential for the system solution
@@ -97,10 +97,10 @@ contains
       call dgetrf(n, n, A, n, ipiv, info)
    end subroutine factorize_matrix
 
-   !> STEP 2: SOLVE PRE-FACTORIZED (L * U * X = B)
+   !> SOLVE PRE-FACTORIZED (L * U * X = B)
    !> Call this multiple times with new RHS vectors B.
    subroutine solve_pre_factorized(A_lu, ipiv, B, info)
-      real(wp), intent(in)    :: A_lu(:, :)   !< Pre-factorized LU matrix
+      real(wp), intent(in)    :: A_lu(:, :)  !< Pre-factorized LU matrix
       integer, intent(in)     :: ipiv(:)     !< Pivot indices from Step 1
       real(wp), intent(inout) :: B(:)        !< RHS vector (overwritten by solution X)
       integer, intent(out)    :: info        !< Status

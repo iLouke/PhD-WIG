@@ -14,7 +14,7 @@ program uvlm_demo
    implicit none
 
    type(timer_t) :: timer
-   type(uvlm_driver_t) :: uvlm
+   type(uvlm_driver_t) :: driver
 
    ! Initialize logger and timer
    call global_logger%init("uvlm_demo.log", level=LOG_DEBUG)
@@ -22,9 +22,9 @@ program uvlm_demo
    call timer%start()
 
    ! Run UVLM analysis via driver
-   call uvlm%init("config.ini")
-   call uvlm%run()
-   call uvlm%finalize()
+   call driver%init("config.ini")
+   call driver%run()
+   call driver%finalize()
 
    ! Report completion
    call timer%stop()
