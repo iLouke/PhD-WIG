@@ -17,30 +17,46 @@ module plotting_mod
       integer :: series_count = 0
       logical :: is_initialized = .false.
 
-      ! Cached settings for lazy initialization
+      ! Figure properties
       character(len=256) :: title_str = ""
       character(len=256) :: xlabel_str = ""
       character(len=256) :: ylabel_str = ""
       logical            :: grid_enabled = .false.
+      integer            :: fig_size(2) = [8, 6]
+      logical            :: has_figsize = .false.
+      logical            :: use_tight_layout = .true.
+
+      ! Axis properties
+      real(wp)           :: x_lim(2) = [0.0_wp, 0.0_wp]
+      real(wp)           :: y_lim(2) = [0.0_wp, 0.0_wp]
+      logical            :: has_xlim = .false.
+      logical            :: has_ylim = .false.
+      character(len=20)  :: x_scale_str = "linear"
+      character(len=20)  :: y_scale_str = "linear"
+
    contains
       procedure :: figure => plotter_figure
       procedure :: title => plotter_title
       procedure :: xlabel => plotter_xlabel
       procedure :: ylabel => plotter_ylabel
       procedure :: grid => plotter_grid
+      procedure :: xrange => plotter_xrange
+      procedure :: yrange => plotter_yrange
+      procedure :: xscale => plotter_xscale
+      procedure :: yscale => plotter_yscale
       procedure :: add => plotter_add_series
       procedure :: save => plotter_save
    end type plotter_t
 
 contains
 
-   subroutine plotter_figure(this)
+   subroutine plotter_figure(this, figsize, tight_layout)
       class(plotter_t), intent(inout) :: this
+      integer, intent(in), optional   :: figsize(2)
+      logical, intent(in), optional   :: tight_layout
 
       global_plotter_id = global_plotter_id + 1
       this%instance_id = global_plotter_id
-
-      ! Ensure directory exists for python script outputs
       call execute_command_line("mkdir -p output")
 
       this%series_count = 0
@@ -49,6 +65,24 @@ contains
       this%xlabel_str = ""
       this%ylabel_str = ""
       this%grid_enabled = .false.
+
+      this%has_xlim = .false.
+      this%has_ylim = .false.
+      this%x_scale_str = "linear"
+      this%y_scale_str = "linear"
+
+      if (present(figsize)) then
+         this%fig_size = figsize
+         this%has_figsize = .true.
+      else
+         this%has_figsize = .false.
+      end if
+
+      if (present(tight_layout)) then
+         this%use_tight_layout = tight_layout
+      else
+         this%use_tight_layout = .true. ! Defaulting to true is usually better
+      end if
    end subroutine plotter_figure
 
    subroutine plotter_title(this, text)
@@ -75,25 +109,84 @@ contains
       this%grid_enabled = enable
    end subroutine plotter_grid
 
-   subroutine plotter_add_series(this, x, y, label, style)
+   subroutine plotter_xrange(this, xmin, xmax)
+      class(plotter_t), intent(inout) :: this
+      real(wp), intent(in) :: xmin, xmax
+      this%x_lim = [xmin, xmax]
+      this%has_xlim = .true.
+   end subroutine plotter_xrange
+
+   subroutine plotter_yrange(this, ymin, ymax)
+      class(plotter_t), intent(inout) :: this
+      real(wp), intent(in) :: ymin, ymax
+      this%y_lim = [ymin, ymax]
+      this%has_ylim = .true.
+   end subroutine plotter_yrange
+
+   subroutine plotter_xscale(this, scale)
+      class(plotter_t), intent(inout) :: this
+      character(len=*), intent(in) :: scale
+      this%x_scale_str = scale
+   end subroutine plotter_xscale
+
+   subroutine plotter_yscale(this, scale)
+      class(plotter_t), intent(inout) :: this
+      character(len=*), intent(in) :: scale
+      this%y_scale_str = scale
+   end subroutine plotter_yscale
+
+   subroutine plotter_add_series(this, x, y, label, style, linewidth, markersize, color)
       class(plotter_t), intent(inout) :: this
       real(wp), intent(in)            :: x(:), y(:)
       character(len=*), intent(in)    :: label
       character(len=*), intent(in)    :: style
+      integer, intent(in), optional   :: linewidth
+      integer, intent(in), optional   :: markersize
+      real(wp), intent(in), optional  :: color(3) ! RGB array [0.0 to 1.0]
 
       ! Lazily initialize pyplot on the first added series
       if (.not. this%is_initialized) then
-         call this%plt%initialize(grid=this%grid_enabled, &
-                                  xlabel=trim(this%xlabel_str), &
-                                  ylabel=trim(this%ylabel_str), &
-                                  title=trim(this%title_str), &
-                                  legend=.true.)
+         if (this%has_figsize) then
+            call this%plt%initialize(grid=this%grid_enabled, &
+                                     xlabel=trim(this%xlabel_str), &
+                                     ylabel=trim(this%ylabel_str), &
+                                     title=trim(this%title_str), &
+                                     tight_layout=this%use_tight_layout, &
+                                     figsize=this%fig_size, &
+                                     legend=.true.)
+         else
+            call this%plt%initialize(grid=this%grid_enabled, &
+                                     xlabel=trim(this%xlabel_str), &
+                                     ylabel=trim(this%ylabel_str), &
+                                     title=trim(this%title_str), &
+                                     tight_layout=this%use_tight_layout, &
+                                     legend=.true.)
+         end if
          this%is_initialized = .true.
       end if
 
       this%series_count = this%series_count + 1
 
-      call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style))
+      if (this%has_xlim .and. this%has_ylim) then
+         call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style), &
+                                linewidth=linewidth, markersize=markersize, color=color, &
+                                xscale=trim(this%x_scale_str), yscale=trim(this%y_scale_str), &
+                                xlim=this%x_lim, ylim=this%y_lim)
+      elseif (this%has_xlim) then
+         call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style), &
+                                linewidth=linewidth, markersize=markersize, color=color, &
+                                xscale=trim(this%x_scale_str), yscale=trim(this%y_scale_str), &
+                                xlim=this%x_lim)
+      elseif (this%has_ylim) then
+         call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style), &
+                                linewidth=linewidth, markersize=markersize, color=color, &
+                                xscale=trim(this%x_scale_str), yscale=trim(this%y_scale_str), &
+                                ylim=this%y_lim)
+      else
+         call this%plt%add_plot(x, y, label=trim(label), linestyle=trim(style), &
+                                linewidth=linewidth, markersize=markersize, color=color, &
+                                xscale=trim(this%x_scale_str), yscale=trim(this%y_scale_str))
+      end if
    end subroutine plotter_add_series
 
    subroutine plotter_save(this, filename)
@@ -112,7 +205,6 @@ contains
       py_filename = "output/plot_"//trim(id_str)//".py"
 
       if (check_matplotlib()) then
-         ! Matplotlib is available, proceed with saving and auto-execution
          call this%plt%savefig(trim(filename), pyfile=trim(py_filename))
          call global_logger%msg(LOG_INFO, "[PLOTTER] Plot saved to: "//trim(filename))
       else
@@ -127,7 +219,6 @@ contains
       logical, save :: available = .false.
 
       if (.not. checked) then
-         ! First attempt: try 'python3'
          call execute_command_line( &
             'python3 -c "import matplotlib.pyplot" > /dev/null 2>&1', &
             exitstat=exit_code)
@@ -136,7 +227,6 @@ contains
             available = .true.
             call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python3) verified successfully.")
          else
-            ! Second attempt: try 'python'
             call execute_command_line( &
                'python -c "import matplotlib.pyplot" > /dev/null 2>&1', &
                exitstat=exit_code)

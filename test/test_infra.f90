@@ -92,26 +92,25 @@ contains
       ! A. Setup Dummy Data
       do i = 1, 50
          x(i) = real(i, wp)
-         y(i) = sin(x(i))
+         y(i) = sin(x(i)*0.2_wp)
       end do
 
-      ! B. Configure Plot
-      call plt%figure()
-      call plt%title("Unit Test Plot")
+      ! B. Configure Plot with the new advanced features
+      call plt%figure(figsize=[10, 6])
+      call plt%title("Unit Test Plot - Advanced")
+      call plt%grid(.true.)
+      call plt%xrange(0.0_wp, 50.0_wp)
+      call plt%yrange(-1.5_wp, 1.5_wp)
 
-      ! Note: Changed "lines" to Matplotlib's standard "-" format
-      call plt%add(x, y, "Test Data", "-")
+      ! Add plot with custom linewidth and RGB color (Blue)
+      call plt%add(x, y, "Sine Wave", style="--", linewidth=2, color=[0.0_wp, 0.4_wp, 0.8_wp])
 
       ! C. Save to PNG (Headless-safe, will invoke Python under the hood)
       call plt%save(plot_file)
 
       ! D. Verify File Creation
-      ! Note: This requires Python and Matplotlib to be installed in the environment.
-      ! If they are missing, the Python script execution fails silently in the background.
       inquire (file=plot_file, exist=file_exists)
 
-      ! Only assert failure if we expected Python/Matplotlib to work.
-      ! For now, we warn if missing.
       if (file_exists) then
          call assert(.true., "Plot file created successfully")
       else
