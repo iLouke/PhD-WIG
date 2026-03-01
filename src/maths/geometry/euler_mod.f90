@@ -1,6 +1,6 @@
 module euler_mod
    use base_kinds_mod, only: wp
-   use constants_mod, only: deg2rad
+   use math_constants_mod, only: deg2rad
    use logger_mod, only: global_logger, LOG_ERROR
    implicit none
    private

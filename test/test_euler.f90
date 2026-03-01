@@ -1,5 +1,6 @@
 program test_euler
    use base_kinds_mod, only: wp
+   use math_constants_mod, only: PI
    use helper_mod, only: print_matrix
    use math_utils_mod
    use euler_mod
