@@ -9,6 +9,7 @@ module plotting_mod
 
    ! Module-level counter for unique plotter instances
    integer, save :: global_plotter_id = 0
+   character(len=16), save :: python_executable = 'python'
 
    type :: plotter_t
       private
@@ -57,7 +58,7 @@ contains
 
       global_plotter_id = global_plotter_id + 1
       this%instance_id = global_plotter_id
-      call execute_command_line("mkdir -p output")
+      call create_output_directory()
 
       this%series_count = 0
       this%is_initialized = .false.
@@ -205,7 +206,7 @@ contains
       py_filename = "output/plot_"//trim(id_str)//".py"
 
       if (check_matplotlib()) then
-         call this%plt%savefig(trim(filename), pyfile=trim(py_filename))
+         call this%plt%savefig(trim(filename), pyfile=trim(py_filename), python=trim(python_executable))
          call global_logger%msg(LOG_INFO, "[PLOTTER] Plot saved to: "//trim(filename))
       else
          call global_logger%msg(LOG_WARN, "[PLOTTER] Skipping plot rendering due to missing Matplotlib.")
@@ -217,26 +218,46 @@ contains
       integer :: exit_code
       logical, save :: checked = .false.
       logical, save :: available = .false.
+      logical :: is_windows
 
       if (.not. checked) then
-         call execute_command_line( &
-            'python3 -c "import matplotlib.pyplot" > /dev/null 2>&1', &
-            exitstat=exit_code)
+         is_windows = is_windows_platform()
 
-         if (exit_code == 0) then
-            available = .true.
-            call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python3) verified successfully.")
-         else
-            call execute_command_line( &
-               'python -c "import matplotlib.pyplot" > /dev/null 2>&1', &
-               exitstat=exit_code)
-
-            if (exit_code == 0) then
-               available = .true.
-               call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python) verified successfully.")
+         if (is_windows) then
+            call try_python_import('py -3', available, exit_code)
+            if (available) then
+               python_executable = 'py -3'
+               call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (py -3) verified successfully.")
             else
-               available = .false.
-               call global_logger%msg(LOG_WARN, "[PLOTTER] WARNING: Python or matplotlib not found.")
+               call try_python_import('py', available, exit_code)
+               if (available) then
+                  python_executable = 'py'
+                  call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (py) verified successfully.")
+               else
+                  call try_python_import('python', available, exit_code)
+                  if (available) then
+                     python_executable = 'python'
+                     call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python) verified successfully.")
+                  else
+                     available = .false.
+                     call global_logger%msg(LOG_WARN, "[PLOTTER] WARNING: Python or matplotlib not found.")
+                  end if
+               end if
+            end if
+         else
+            call try_python_import('python3', available, exit_code)
+            if (available) then
+               python_executable = 'python3'
+               call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python3) verified successfully.")
+            else
+               call try_python_import('python', available, exit_code)
+               if (available) then
+                  python_executable = 'python'
+                  call global_logger%msg(LOG_INFO, "[PLOTTER] Matplotlib (python) verified successfully.")
+               else
+                  available = .false.
+                  call global_logger%msg(LOG_WARN, "[PLOTTER] WARNING: Python or matplotlib not found.")
+               end if
             end if
          end if
          checked = .true.
@@ -244,5 +265,45 @@ contains
 
       is_available = available
    end function check_matplotlib
+
+   subroutine try_python_import(python_cmd, available, exit_code)
+      character(len=*), intent(in) :: python_cmd
+      logical, intent(out) :: available
+      integer, intent(out) :: exit_code
+
+      integer :: cmd_status
+      call execute_command_line(trim(python_cmd)//' -c "import matplotlib.pyplot"', &
+                                cmdstat=cmd_status, exitstat=exit_code)
+      available = (cmd_status == 0 .and. exit_code == 0)
+   end subroutine try_python_import
+
+   subroutine create_output_directory()
+      logical :: dir_exists
+      integer :: cmdstat, exitstat
+
+      inquire (file='output', exist=dir_exists)
+      if (dir_exists) return
+
+      if (is_windows_platform()) then
+         call execute_command_line('cmd /c if not exist output mkdir output', &
+                                   cmdstat=cmdstat, exitstat=exitstat)
+      else
+         call execute_command_line('mkdir -p output', cmdstat=cmdstat, exitstat=exitstat)
+      end if
+   end subroutine create_output_directory
+
+   logical function is_windows_platform() result(is_windows)
+      character(len=64) :: os_name
+      integer :: env_len, env_stat
+
+      os_name = ''
+      call get_environment_variable('OS', value=os_name, length=env_len, status=env_stat)
+
+      if (env_stat == 0 .and. env_len > 0) then
+         is_windows = index(adjustl(os_name(1:env_len)), 'Windows_NT') > 0
+      else
+         is_windows = .false.
+      end if
+   end function is_windows_platform
 
 end module plotting_mod

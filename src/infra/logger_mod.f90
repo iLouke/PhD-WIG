@@ -51,7 +51,7 @@ contains
       if (present(console)) this%console_output = console
 
       ! Directory creation (Graceful fallback)
-      call execute_command_line("mkdir -p output", exitstat=stat)
+      call create_output_directory(stat)
       if (stat /= 0) then
          print *, "[LOGGER] WARNING: Could not create 'output/' directory. Logging to current dir."
          full_path = trim(filename)
@@ -139,5 +139,46 @@ contains
          this%file_enabled = .false.
       end if
    end subroutine logger_close
+
+   subroutine create_output_directory(stat)
+      integer, intent(out) :: stat
+
+      logical :: dir_exists
+      integer :: cmdstat, exitstat
+
+      inquire (file='output', exist=dir_exists)
+      if (dir_exists) then
+         stat = 0
+         return
+      end if
+
+      if (is_windows_platform()) then
+         call execute_command_line('cmd /c if not exist output mkdir output', &
+                                   cmdstat=cmdstat, exitstat=exitstat)
+      else
+         call execute_command_line('mkdir -p output', cmdstat=cmdstat, exitstat=exitstat)
+      end if
+
+      inquire (file='output', exist=dir_exists)
+      if (cmdstat == 0 .and. exitstat == 0 .and. dir_exists) then
+         stat = 0
+      else
+         stat = 1
+      end if
+   end subroutine create_output_directory
+
+   logical function is_windows_platform() result(is_windows)
+      character(len=64) :: os_name
+      integer :: env_len, env_stat
+
+      os_name = ''
+      call get_environment_variable('OS', value=os_name, length=env_len, status=env_stat)
+
+      if (env_stat == 0 .and. env_len > 0) then
+         is_windows = index(adjustl(os_name(1:env_len)), 'Windows_NT') > 0
+      else
+         is_windows = .false.
+      end if
+   end function is_windows_platform
 
 end module logger_mod
