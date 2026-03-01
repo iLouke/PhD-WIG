@@ -9,7 +9,7 @@ copyright = "Copyright 2026, iLouke"
 auto-executables = true
 auto-tests = true
 auto-examples = true
-link = ["flexiblas"]
+link = ["openblas"]
 
 [dependencies]
 stdlib          = "*"					                                            # Standard Modern Fortran Library
