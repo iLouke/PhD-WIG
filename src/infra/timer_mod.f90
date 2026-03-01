@@ -49,7 +49,7 @@ contains
    end subroutine timer_reset
 
    !> Returns elapsed time in seconds.
-   !> Works correctly even if the timer is still running.
+   !> Works even if the timer is still running.
    function timer_report(this) result(seconds)
       class(timer_t), intent(in) :: this
       real(wp) :: seconds

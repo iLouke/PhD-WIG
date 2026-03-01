@@ -1,6 +1,7 @@
 module plotting_mod
    use base_kinds_mod, only: wp
    use logger_mod, only: global_logger, LOG_INFO, LOG_WARN, LOG_ERROR
+   use system_utils_mod, only: ensure_directory_exists, is_windows_platform, run_command_status
    use pyplot_module, only: pyplot
 
    implicit none
@@ -55,10 +56,11 @@ contains
       class(plotter_t), intent(inout) :: this
       integer, intent(in), optional   :: figsize(2)
       logical, intent(in), optional   :: tight_layout
+      integer :: dir_status
 
       global_plotter_id = global_plotter_id + 1
       this%instance_id = global_plotter_id
-      call create_output_directory()
+      call ensure_directory_exists('output', dir_status)
 
       this%series_count = 0
       this%is_initialized = .false.
@@ -272,38 +274,9 @@ contains
       integer, intent(out) :: exit_code
 
       integer :: cmd_status
-      call execute_command_line(trim(python_cmd)//' -c "import matplotlib.pyplot"', &
-                                cmdstat=cmd_status, exitstat=exit_code)
+      call run_command_status(trim(python_cmd)//' -c "import matplotlib.pyplot"', &
+                              cmd_status, exit_code)
       available = (cmd_status == 0 .and. exit_code == 0)
    end subroutine try_python_import
-
-   subroutine create_output_directory()
-      logical :: dir_exists
-      integer :: cmdstat, exitstat
-
-      inquire (file='output', exist=dir_exists)
-      if (dir_exists) return
-
-      if (is_windows_platform()) then
-         call execute_command_line('cmd /c if not exist output mkdir output', &
-                                   cmdstat=cmdstat, exitstat=exitstat)
-      else
-         call execute_command_line('mkdir -p output', cmdstat=cmdstat, exitstat=exitstat)
-      end if
-   end subroutine create_output_directory
-
-   logical function is_windows_platform() result(is_windows)
-      character(len=64) :: os_name
-      integer :: env_len, env_stat
-
-      os_name = ''
-      call get_environment_variable('OS', value=os_name, length=env_len, status=env_stat)
-
-      if (env_stat == 0 .and. env_len > 0) then
-         is_windows = index(adjustl(os_name(1:env_len)), 'Windows_NT') > 0
-      else
-         is_windows = .false.
-      end if
-   end function is_windows_platform
 
 end module plotting_mod
