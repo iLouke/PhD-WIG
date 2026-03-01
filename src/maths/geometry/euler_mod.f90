@@ -74,7 +74,7 @@ contains
       s = sin(actual_angle)
       t = 1.0_wp - c
 
-      norm = sqrt(sum(axis**2))
+      norm = norm2(axis)
       if (norm > 0.0_wp) then
          ux = axis(1)/norm
          uy = axis(2)/norm
@@ -86,12 +86,10 @@ contains
          return
       end if
 
-      ! Rodrigues' rotation formula naturally creates an active rotation matrix
-      R = reshape((/ &
-                  t*ux*ux + c, t*ux*uy + s*uz, t*ux*uz - s*uy, &
-                  t*ux*uy - s*uz, t*uy*uy + c, t*uy*uz + s*ux, &
-                  t*ux*uz + s*uy, t*uy*uz - s*ux, t*uz*uz + c &
-                  /), shape(R))
+      ! Rodrigues' rotation formula
+      R = reshape((/t*ux*ux + c, t*ux*uy + s*uz, t*ux*uz - s*uy, &
+                    t*ux*uy - s*uz, t*uy*uy + c, t*uy*uz + s*ux, &
+                    t*ux*uz + s*uy, t*uy*uz - s*ux, t*uz*uz + c/), shape(R))
 
    end function get_arbitrary_rotation_matrix
 
