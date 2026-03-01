@@ -3,7 +3,7 @@ module helper_mod
    implicit none
    private
 
-   public :: real_to_char, int_to_char, count_rows
+   public :: real_to_char, int_to_char, count_rows, print_matrix
 
 contains
 
@@ -64,5 +64,17 @@ contains
 
       close (iunit)
    end function count_rows
+
+   ! --- Helper: Print Matrix cleanly ---
+   subroutine print_matrix(M)
+      real(wp), intent(in) :: M(3, 3)
+      integer :: i
+
+      ! Print row by row with a fixed 10.4 format
+      do i = 1, 3
+         write (*, "(3(F10.4))") M(i, :)
+      end do
+      print *, "" ! Empty line for spacing
+   end subroutine print_matrix
 
 end module helper_mod

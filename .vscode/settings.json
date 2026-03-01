@@ -1,0 +1,21 @@
+{
+    "fortran.linter.compiler": "gfortran",
+    "fortran.linter.extraArgs": [
+        "-I${workspaceFolder}/build/dependencies/stdlib/include"
+    ],
+    "fortran.linter.includePaths": [
+        "${workspaceFolder}/src/**",
+        "${workspaceFolder}/app/**",
+        "${workspaceFolder}/test/**",
+        "${workspaceFolder}/build/**",
+        "${workspaceFolder}/build/dependencies/**/include/**",
+        "${workspaceFolder}/build/dependencies/**/src/**"
+    ],
+    "fortran.fortls.directories": [
+        "./src/**",
+        "./app/**",
+        "./test/**",
+        "./build/dependencies/**/src/**"
+    ],
+    "fortran.fortls.notifyInit": true
+}

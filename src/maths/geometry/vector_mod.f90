@@ -3,7 +3,7 @@ module vector_mod
    implicit none
    private
 
-   public :: cross_product
+   public :: cross_product, normalise
 
 contains
 

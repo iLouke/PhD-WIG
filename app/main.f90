@@ -1,8 +1,9 @@
 program phd
    use base_kinds_mod, only: wp, ip
    use helper_mod, only: real_to_char
-   use logger_mod, only: global_logger, LOG_INFO
+   use logger_mod, only: global_logger, LOG_INFO, LOG_ERROR
    use timer_mod, only: timer_t
+   use io_mod
    implicit none
 
    type(timer_t)       :: timer
@@ -33,8 +34,27 @@ program phd
 contains
 
    subroutine setup_simulation()
-      ! Placeholder for simulation setup (initial conditions, parameters, etc.)
-      call global_logger%msg(LOG_INFO, "Setting up simulation...")
+      implicit none
+
+      character(len=:), allocatable :: title
+      character(len=:), allocatable :: io_message
+      real(wp), allocatable :: spectrum(:)
+      integer :: io_status
+
+      call read_config_file("input.toml", title, spectrum, io_status, io_message)
+      if (io_status /= 0) then
+         call global_logger%msg(LOG_ERROR, "[IO] "//trim(io_message))
+         error stop 1
+      end if
+
+      if (allocated(title)) then
+         print '(a)', "Title: '"//title//"'"
+      end if
+
+      print '(*(g0, 1x))', "Entries:", size(spectrum)
+      if (size(spectrum) > 0) then
+         print '(*(g0, 1x))', "Spectrum:", spectrum
+      end if
    end subroutine setup_simulation
 
    subroutine get_aerodynamic()
