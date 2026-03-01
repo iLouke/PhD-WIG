@@ -1,13 +1,8 @@
 program phd
-   !! ═══════════════════════════════════════════════════════════════════════
-   !! PHD - WIG Simulation Program
-   !! ═══════════════════════════════════════════════════════════════════════
-
    use base_kinds_mod, only: wp, ip
    use helper_mod, only: real_to_char
    use logger_mod, only: global_logger, LOG_INFO
    use timer_mod, only: timer_t
-   use plotting_mod, only: plotter_t, check_matplotlib
    implicit none
 
    type(timer_t)       :: timer
@@ -23,9 +18,10 @@ program phd
 
    ! Time Stepping Loop
    do while (time < max_time)
-      call get_aerodynamic()
-      call get_hydronamic()
-      call update_state()
+      ! call get_aerodynamic(state, vehicle)
+      ! call get_hydronamic(state, vehicle)
+      ! call update_state(state)
+      ! call write_output(state, time)
       time = time + dt
    end do
 

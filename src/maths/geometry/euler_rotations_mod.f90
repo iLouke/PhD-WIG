@@ -1,48 +1,52 @@
 module euler_rotations_mod
    use base_kinds_mod, only: wp
+   use constants_mod, only: deg2rad
+   use logger_mod, only: global_logger, LOG_ERROR
    implicit none
    private
 
-   public :: build_rotation_matrix_aero
-   public :: extract_euler_aero_from_matrix
+   public :: get_rotation_matrix, get_single_rotation_matrix
 
 contains
 
-   pure function build_rotation_matrix_aero(alpha, beta, gamma) result(R)
-      real(wp), intent(in) :: alpha, beta, gamma
+   pure function get_single_rotation_matrix(angle, rotation, rads) result(R)
+      real(wp), intent(in) :: angle
+      character(len=*), intent(in) :: rotation
+      logical, intent(in), optional :: rads
       real(wp) :: R(3, 3)
-      real(wp) :: ca, sa, cb, sb, cg, sg
+      real(wp) :: c, s
 
-      ca = cos(alpha); sa = sin(alpha)
-      cb = cos(beta); sb = sin(beta)
-      cg = cos(gamma); sg = sin(gamma)
-
-      R(1, 1) = ca*cb
-      R(1, 2) = sb
-      R(1, 3) = sa*cb
-
-      R(2, 1) = -(ca*sb*cg - sa*sg)
-      R(2, 2) = cb*cg
-      R(2, 3) = -(sa*sb*cg - ca*sg)
-
-      R(3, 1) = ca*sb*sg - sa*cg
-      R(3, 2) = -cb*sg
-      R(3, 3) = sa*sb*sg + ca*cg
-   end function build_rotation_matrix_aero
-
-   pure subroutine extract_euler_aero_from_matrix(R, alpha, beta, gamma)
-      real(wp), intent(in) :: R(3, 3)
-      real(wp), intent(out) :: alpha, beta, gamma
-
-      beta = asin(max(-1.0_wp, min(1.0_wp, R(1, 2))))
-
-      if (abs(cos(beta)) > 1.0e-10_wp) then
-         alpha = atan2(R(1, 3), R(1, 1))
-         gamma = atan2(-R(3, 2), R(2, 2))
+      if (present(rads) .and. rads) then
+         ! Angle is already in radians
+         c = cos(angle)
+         s = sin(angle)
       else
-         alpha = atan2(-R(3, 1), R(3, 3))
-         gamma = 0.0_wp
+         ! Convert angle from degrees to radians
+         c = cos(angle*deg2rad)
+         s = sin(angle*deg2rad)
       end if
-   end subroutine extract_euler_aero_from_matrix
 
+      select case (rotation)
+      case ('alpha', 'Alpha', 'ALPHA', 'z', 'Z', 'yaw', 'Yaw', 'YAW')
+         R = reshape((/1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, c, -s, 0.0_wp, s, c/), shape(R))
+      case ('beta', 'Beta', 'BETA', 'y', 'Y', 'pitch', 'Pitch', 'PITCH')
+         R = reshape((/c, 0.0_wp, s, 0.0_wp, 1.0_wp, 0.0_wp, -s, 0.0_wp, c/), shape(R))
+      case ('gamma', 'Gamma', 'GAMMA', 'x', 'X', 'roll', 'Roll', 'ROLL')
+         R = reshape((/c, -s, 0.0_wp, s, c, 0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp/), shape(R))
+      case default
+         R = reshape((/1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp/), shape(R))
+      end select
+   end function get_single_rotation_matrix
+
+   pure function get_rotation_matrix(alpha, beta, gamma, rads) result(R)
+      real(wp), intent(in) :: alpha, beta, gamma
+      logical, intent(in), optional :: rads
+      real(wp), dimension(3, 3) :: R, Rx, Ry, Rz
+
+      Rx = get_single_rotation_matrix(gamma, 'gamma', rads)
+      Ry = get_single_rotation_matrix(beta, 'beta', rads)
+      Rz = get_single_rotation_matrix(alpha, 'alpha', rads)
+      R = matmul(Rz, matmul(Ry, Rx))
+
+   end function get_rotation_matrix
 end module euler_rotations_mod
