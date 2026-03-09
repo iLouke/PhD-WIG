@@ -1,3 +1,4 @@
+.vscode/
 build/
 output/
 
@@ -11,4 +12,3 @@ output/
 *~
 *.swp
 .DS_Store
-
