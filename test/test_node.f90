@@ -44,7 +44,6 @@ contains
    subroutine test_node_inherited_methods()
       type(node_t) :: nd1, nd2
       real(wp) :: dist
-      real(wp) :: rot_matrix(3, 3)
 
       print *, "Testing inherited point_t methods..."
 
