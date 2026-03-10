@@ -1,6 +1,6 @@
 program test_vector
    use base_kinds_mod, only: wp
-   use vector_mod, only: vector_t, operator(*), operator(.cross.)
+   use vector_mod, only: vector_t, operator(*), operator(.x.)
    implicit none
 
    integer :: fail_count = 0
@@ -34,10 +34,10 @@ contains
       ey = vector_t(0.0_wp, 1.0_wp, 0.0_wp)
       ez = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      result = ex.cross.ey
+      result = ex.x.ey
       call assert_vector_close(result, ez, "ex x ey = ez")
 
-      result = ey.cross.ex
+      result = ey.x.ex
       call assert_vector_close(result, (-1.0_wp)*ez, "ey x ex = -ez")
    end subroutine test_cross_product_basis
 
@@ -48,7 +48,7 @@ contains
 
       a = vector_t(2.0_wp, -1.0_wp, 3.0_wp)
       b = vector_t(0.5_wp, 4.0_wp, -2.0_wp)
-      c = a.cross.b
+      c = a.x.b
 
       ! Notice the overloaded dot product using (*)
       call assert(abs(c*a) < TOL, "(a x b) is orthogonal to a")

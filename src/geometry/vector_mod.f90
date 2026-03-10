@@ -6,7 +6,7 @@ module vector_mod
    public :: vector_t
    ! Export overloaded operators so other modules can use standard math symbols
    public :: operator(+), operator(-), operator(*)
-   public :: operator(.cross.)
+   public :: operator(.x.)
 
    interface vector_t
       module procedure constructor_xyz
@@ -36,7 +36,7 @@ module vector_mod
       module procedure vector_dot_product
    end interface
 
-   interface operator(.cross.)
+   interface operator(.x.)
       module procedure vector_cross_product
    end interface
 
