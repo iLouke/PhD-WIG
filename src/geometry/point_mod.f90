@@ -6,7 +6,8 @@ module point_mod
    public :: point_t
 
    interface point_t
-      module procedure point_constructor
+      module procedure point_constructor_xyz
+      module procedure point_constructor_array
    end interface point_t
 
    type :: point_t
@@ -27,7 +28,7 @@ module point_mod
 contains
 
    ! --- Constructor ---
-   pure function point_constructor(id, x, y, z) result(new_point)
+   pure function point_constructor_xyz(id, x, y, z) result(new_point)
       integer(ip), intent(in), optional :: id
       real(wp), intent(in), optional :: x, y, z
       type(point_t) :: new_point
@@ -36,7 +37,16 @@ contains
       if (present(x)) new_point%coordinates(1) = x
       if (present(y)) new_point%coordinates(2) = y
       if (present(z)) new_point%coordinates(3) = z
-   end function point_constructor
+   end function point_constructor_xyz
+
+   pure function point_constructor_array(id, coords) result(new_point)
+      integer(ip), intent(in), optional :: id
+      real(wp), intent(in) :: coords(3)
+      type(point_t) :: new_point
+
+      if (present(id)) new_point%id = id
+      new_point%coordinates = coords
+   end function point_constructor_array
 
    ! --- Type-Bound Procedures ---
    pure subroutine point_set_coordinates(this, x, y, z)
