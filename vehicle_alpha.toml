@@ -1,0 +1,7 @@
+name = "WIG_Alpha"
+
+[mesh]
+points_number = 1500
+points_filename = "points_alpha.dat"
+panels_number = 12434
+panels_filename = "panels_alpha.dat"

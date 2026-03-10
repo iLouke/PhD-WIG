@@ -1,0 +1,7 @@
+name = "WIG_Demo"
+
+[mesh]
+points_number = 6
+points_filename = "points_demo.dat"
+panels_number = 2
+panels_filename = "panels_demo.dat"

@@ -1,5 +1,5 @@
 program test_panel
-   use base_kinds_mod, only: wp
+   use base_kinds_mod, only: wp, ip
    use point_mod, only: point_t
    use node_mod, only: node_t
    use vector_mod, only: vector_t
@@ -46,7 +46,8 @@ contains
       cp = point_t(x=0.5_wp, y=0.5_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 2.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 1.0_wp)
+      ! Περνάμε το ID και τους κόμβους ως πίνακα
+      panel = panel_t(1_ip, [n1, n2, n3, n4], cp, normal_vec, 1.0_wp)
 
       call assert(.not. panel%is_triangle, "Quadrilateral panel is not flagged as triangle")
       call assert(abs(panel%area - 1.0_wp) < TOL, "Quadrilateral area stored correctly")
@@ -69,7 +70,7 @@ contains
       cp = point_t(x=1.0_wp/3.0_wp, y=1.0_wp/3.0_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 0.5_wp)
+      panel = panel_t(2_ip, [n1, n2, n3, n4], cp, normal_vec, 0.5_wp)
 
       call assert(panel%is_triangle, "Triangle panel is detected when n3 == n4")
       call assert(abs(panel%max_diagonal - sqrt(2.0_wp)) < TOL, "Triangle max edge length is correct")
@@ -91,7 +92,7 @@ contains
       cp = point_t(x=0.5_wp, y=0.5_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 0.0_wp)
+      panel = panel_t(3_ip, [n1, n2, n3, n4], cp, normal_vec, 0.0_wp)
       call assert(abs(panel%area - 1.0_wp) < TOL, "Quadrilateral area is auto-computed when input area is zero")
 
       ! Right triangle
@@ -101,7 +102,7 @@ contains
       n4 = n3
       cp = point_t(x=1.0_wp/3.0_wp, y=1.0_wp/3.0_wp, z=0.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, -1.0_wp)
+      panel = panel_t(4_ip, [n1, n2, n3, n4], cp, normal_vec, -1.0_wp)
       call assert(abs(panel%area - 0.5_wp) < TOL, "Triangle area is auto-computed when input area is negative")
    end subroutine test_panel_auto_area_computation
 
@@ -120,9 +121,10 @@ contains
       cp = point_t(x=0.5_wp, y=0.5_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 1.0_wp)
+      panel = panel_t(5_ip, [n1, n2, n3, n4], cp, normal_vec, 1.0_wp)
 
-      call panel%rotate(90.0_wp, [0.0_wp, 0.0_wp, 1.0_wp])
+      ! Άλλαξε σε rotate_origin
+      call panel%rotate_origin(90.0_wp, [0.0_wp, 0.0_wp, 1.0_wp])
       call assert_vector_close(panel%nodes(2)%coordinates, [0.0_wp, 1.0_wp, 0.0_wp], "Rotation maps node 2 correctly")
       call assert_vector_close(panel%center_point%coordinates, [-0.5_wp, 0.5_wp, 0.0_wp], "Rotation updates center point")
       call assert_vector_close(panel%normal%components, [0.0_wp, 0.0_wp, 1.0_wp], "Rotation preserves normal for z-axis rotation")
@@ -151,14 +153,15 @@ contains
       cp = point_t(x=0.5_wp, y=0.5_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 1.0_wp)
+      panel = panel_t(6_ip, [n1, n2, n3, n4], cp, normal_vec, 1.0_wp)
 
       x_initial = [panel%nodes(1)%coordinates(1), panel%nodes(2)%coordinates(1), panel%nodes(3)%coordinates(1), panel%nodes(4)%coordinates(1), panel%nodes(1)%coordinates(1)]
       y_initial = [panel%nodes(1)%coordinates(2), panel%nodes(2)%coordinates(2), panel%nodes(3)%coordinates(2), panel%nodes(4)%coordinates(2), panel%nodes(1)%coordinates(2)]
       cx_initial = [panel%center_point%coordinates(1)]
       cy_initial = [panel%center_point%coordinates(2)]
 
-      call panel%rotate(25.0_wp, [0.0_wp, 0.0_wp, 1.0_wp])
+      ! Άλλαξε σε rotate_origin
+      call panel%rotate_origin(45.0_wp, [0.0_wp, 0.0_wp, 1.0_wp])
 
       x = [panel%nodes(1)%coordinates(1), panel%nodes(2)%coordinates(1), panel%nodes(3)%coordinates(1), panel%nodes(4)%coordinates(1), panel%nodes(1)%coordinates(1)]
       y = [panel%nodes(1)%coordinates(2), panel%nodes(2)%coordinates(2), panel%nodes(3)%coordinates(2), panel%nodes(4)%coordinates(2), panel%nodes(1)%coordinates(2)]
@@ -199,7 +202,7 @@ contains
       cp = point_t(x=0.5_wp, y=0.5_wp, z=0.0_wp)
       normal_vec = vector_t(0.0_wp, 0.0_wp, 1.0_wp)
 
-      panel = panel_t(n1, n2, n3, n4, cp, normal_vec, 1.0_wp)
+      panel = panel_t(7_ip, [n1, n2, n3, n4], cp, normal_vec, 1.0_wp)
 
       x_initial = [panel%nodes(1)%coordinates(1), panel%nodes(2)%coordinates(1), panel%nodes(3)%coordinates(1), panel%nodes(4)%coordinates(1), panel%nodes(1)%coordinates(1)]
       y_initial = [panel%nodes(1)%coordinates(2), panel%nodes(2)%coordinates(2), panel%nodes(3)%coordinates(2), panel%nodes(4)%coordinates(2), panel%nodes(1)%coordinates(2)]
