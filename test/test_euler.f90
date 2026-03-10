@@ -2,7 +2,6 @@ program test_euler
    use base_kinds_mod, only: wp
    use math_constants_mod, only: PI
    use helper_mod, only: print_matrix
-   use math_utils_mod
    use euler_mod
    implicit none
 
@@ -74,7 +73,7 @@ contains
 
    ! --- 2. Combined Rotation Matrix Test ---
    subroutine test_combined_rotation()
-      real(wp) :: R(3, 3), Rx(3, 3), Ry(3, 3), Rz(3, 3), R_manual(3, 3)
+      real(wp) :: R(3, 3), R_manual(3, 3)
       real(wp) :: roll, pitch, yaw
       real(wp) :: cosg, sing, cosb, sinb, cosa, sina
 
