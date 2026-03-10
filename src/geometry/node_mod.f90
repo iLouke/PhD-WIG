@@ -7,24 +7,23 @@ module node_mod
    public :: node_t
 
    interface node_t
-      module procedure node_constructor
+      module procedure node_constructor_xyz
+      module procedure node_constructor_array
    end interface node_t
 
    ! Define node_t as an extension of point_t
    type, extends(point_t) :: node_t
-      logical :: is_trailing_edge = .false. ! Default to false
+      logical :: marked = .false. ! Default to false
    contains
-      procedure :: set_trailing_edge => node_set_trailing_edge
-      procedure :: get_trailing_edge => node_get_trailing_edge
    end type node_t
 
 contains
 
    ! --- Constructor ---
-   pure function node_constructor(id, x, y, z, is_te) result(new_node)
+   pure function node_constructor_xyz(id, x, y, z, trailing_edge) result(new_node)
       integer(ip), intent(in), optional :: id
       real(wp), intent(in), optional :: x, y, z
-      logical, intent(in), optional :: is_te
+      logical, intent(in), optional :: trailing_edge
       type(node_t) :: new_node
 
       ! Set inherited components
@@ -34,20 +33,20 @@ contains
       if (present(z)) new_node%coordinates(3) = z
 
       ! Set the new child component
-      if (present(is_te)) new_node%is_trailing_edge = is_te
-   end function node_constructor
+      if (present(trailing_edge)) new_node%marked = trailing_edge
+   end function node_constructor_xyz
 
-   ! --- Type-Bound Procedures ---
-   pure subroutine node_set_trailing_edge(this, is_te)
-      class(node_t), intent(inout) :: this
-      logical, intent(in) :: is_te
-      this%is_trailing_edge = is_te
-   end subroutine node_set_trailing_edge
+   pure function node_constructor_array(id, coords, trailing_edge) result(new_node)
+      integer(ip), intent(in), optional :: id
+      real(wp), intent(in) :: coords(3)
+      logical, intent(in), optional :: trailing_edge
+      type(node_t) :: new_node
 
-   pure function node_get_trailing_edge(this) result(is_te)
-      class(node_t), intent(in) :: this
-      logical :: is_te
-      is_te = this%is_trailing_edge
-   end function node_get_trailing_edge
+      ! Set inherited components
+      if (present(id)) new_node%id = id
+      new_node%coordinates = coords
 
+      ! Set the new child component
+      if (present(trailing_edge)) new_node%marked = trailing_edge
+   end function node_constructor_array
 end module node_mod
