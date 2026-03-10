@@ -57,7 +57,11 @@ contains
       pt = point_t(x=0.0_wp, y=0.0_wp, z=0.0_wp)
       call pt%translate(1.5_wp, -2.0_wp, 3.0_wp)
 
-      call assert_vector_close(pt%coordinates, [1.5_wp, -2.0_wp, 3.0_wp], "Translation from origin")
+      call assert_vector_close(pt%coordinates, [1.5_wp, -2.0_wp, 3.0_wp], "Translation from origin [xyz]")
+      pt = point_t(x=0.0_wp, y=0.0_wp, z=0.0_wp)
+      call pt%translate([1.5_wp, -2.0_wp, 3.0_wp])
+
+      call assert_vector_close(pt%coordinates, [1.5_wp, -2.0_wp, 3.0_wp], "Translation from origin [vector]")
    end subroutine test_point_translation
 
    subroutine test_point_rotation()
@@ -133,12 +137,12 @@ contains
 
       print *, "Testing point visualization output..."
 
-      pt = point_t(x=1.0_wp, y=1.0_wp, z=0.0_wp)
+      pt = point_t(x=0.0_wp, y=0.0_wp, z=0.0_wp)
       px_init = [pt%coordinates(1)]
       py_init = [pt%coordinates(2)]
 
       ! Translate the point
-      call pt%translate(2.0_wp, 1.5_wp, 0.0_wp)
+      call pt%translate(2.0_wp, 2.0_wp, 0.0_wp)
       px_trans = [pt%coordinates(1)]
       py_trans = [pt%coordinates(2)]
 
