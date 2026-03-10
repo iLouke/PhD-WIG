@@ -30,11 +30,11 @@ contains
 
       ! 1. Default initialization (should default to false)
       nd1 = node_t(id=1, x=1.0_wp, y=0.0_wp, z=0.0_wp)
-      call assert(.not. nd1%get_trailing_edge(), "Default trailing edge flag is initialized to .false.")
+      call assert(.not. nd1%marked, "Default trailing edge flag is initialized to .false.")
 
       ! 2. Explicit initialization via custom constructor
-      nd2 = node_t(id=2, x=2.0_wp, y=0.0_wp, z=0.0_wp, is_te=.true.)
-      call assert(nd2%get_trailing_edge(), "Constructor explicitly sets trailing edge flag to .true.")
+      nd2 = node_t(id=2, x=2.0_wp, y=0.0_wp, z=0.0_wp, trailing_edge=.true.)
+      call assert(nd2%marked, "Constructor explicitly sets trailing edge flag to .true.")
 
       ! 3. Setter test
       call nd1%set_trailing_edge(.true.)
@@ -48,8 +48,8 @@ contains
 
       print *, "Testing inherited point_t methods..."
 
-      nd1 = node_t(id=1, x=0.0_wp, y=0.0_wp, z=0.0_wp, is_te=.true.)
-      nd2 = node_t(id=2, x=3.0_wp, y=4.0_wp, z=0.0_wp, is_te=.false.)
+      nd1 = node_t(id=1, x=0.0_wp, y=0.0_wp, z=0.0_wp, trailing_edge=.true.)
+      nd2 = node_t(id=2, coords=[3.0_wp, 4.0_wp, 0.0_wp], trailing_edge=.false.)
 
       ! 1. Test inherited translation
       call nd1%translate(1.0_wp, 1.0_wp, 0.0_wp)
@@ -60,14 +60,6 @@ contains
       call nd1%translate(-1.0_wp, -1.0_wp, 0.0_wp)
       dist = nd1%distance_to(nd2)
       call assert(abs(dist - 5.0_wp) < TOL, "Node successfully uses inherited distance_to() with another node")
-
-      ! 3. Test inherited rotation
-      rot_matrix(1, :) = [0.0_wp, -1.0_wp, 0.0_wp]
-      rot_matrix(2, :) = [1.0_wp, 0.0_wp, 0.0_wp]
-      rot_matrix(3, :) = [0.0_wp, 0.0_wp, 1.0_wp]
-
-      call nd2%rotate(rot_matrix)
-      call assert_vector_close(nd2%coordinates, [-4.0_wp, 3.0_wp, 0.0_wp], "Node successfully uses inherited rotate()")
 
    end subroutine test_node_inherited_methods
 

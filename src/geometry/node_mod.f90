@@ -15,6 +15,8 @@ module node_mod
    type, extends(point_t) :: node_t
       logical :: marked = .false. ! Default to false
    contains
+      procedure :: set_trailing_edge => node_set_trailing_edge
+      procedure :: get_trailing_edge => node_get_trailing_edge
    end type node_t
 
 contains
@@ -49,4 +51,17 @@ contains
       ! Set the new child component
       if (present(trailing_edge)) new_node%marked = trailing_edge
    end function node_constructor_array
+
+   pure subroutine node_set_trailing_edge(this, is_te)
+      class(node_t), intent(inout) :: this
+      logical, intent(in) :: is_te
+      this%marked = is_te
+   end subroutine node_set_trailing_edge
+
+   pure function node_get_trailing_edge(this) result(is_te)
+      class(node_t), intent(in) :: this
+      logical :: is_te
+      is_te = this%marked
+   end function node_get_trailing_edge
+
 end module node_mod
